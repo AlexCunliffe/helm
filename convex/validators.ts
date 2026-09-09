@@ -222,7 +222,13 @@ export const settingsPatchValidator = v.object({
     days: v.optional(v.array(v.number())),
     eveningWatchFrom: v.optional(v.union(v.string(), v.null())),
   })),
-  caps: v.optional(v.union(v.object(capsFields), v.null())),
+  caps: v.optional(v.union(v.object({
+    today: v.optional(v.union(v.number(), v.null())), wins: v.optional(v.union(v.number(), v.null())),
+    ageing: v.optional(v.union(v.number(), v.null())), waiting: v.optional(v.union(v.number(), v.null())),
+    upcoming: v.optional(v.union(v.number(), v.null())), newToday: v.optional(v.union(v.number(), v.null())),
+    waitingAgeingDays: v.optional(v.union(v.number(), v.null())), openAgeingDays: v.optional(v.union(v.number(), v.null())),
+    meetingPrepLeadMin: v.optional(v.union(v.number(), v.null())), focusMinutes: v.optional(v.union(v.number(), v.null())),
+  }), v.null())),
   sources: v.optional(v.array(sourceValidator)),
   hook: v.optional(v.object({
     logSessions: v.optional(v.boolean()), includeCwd: v.optional(v.boolean()),

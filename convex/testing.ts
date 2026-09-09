@@ -72,3 +72,18 @@ export const seedEmptyProbe = internalMutation({
     throw new ConvexError("SEED_PROBE_PASSED_ROLLED_BACK");
   },
 });
+
+/** Delete only unused, explicitly named area fixtures. */
+export const removeFixtureAreas = internalMutation({
+  args: { keys: v.array(v.string()) }, returns: v.null(),
+  handler: async (ctx, { keys }) => {
+    if (keys.length > 20 || keys.some(k => !k.startsWith("test-"))) throw new ConvexError("Use at most 20 test-prefixed area keys.");
+    for (const key of keys) {
+      const area = await ctx.db.query("areas").withIndex("by_key", q => q.eq("key", key)).unique();
+      if (!area) continue;
+      if (await ctx.db.query("tasks").withIndex("by_area", q => q.eq("areaId", area._id)).first()) throw new ConvexError("Area still has tasks.");
+      await ctx.db.delete(area._id);
+    }
+    return null;
+  },
+});

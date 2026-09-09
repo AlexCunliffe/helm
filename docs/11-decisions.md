@@ -17,3 +17,6 @@
 - **D15 · Function authentication.** The single-user implementation uses an API key argument. The imported gate requires `HELM_REQUIRE_KEY=1`; closing the default is pending.
 - **D16 · Browser client.** The imported page uses a pinned browser-client import. Bundling it into the page is pending.
 - **D17 · Merge safety.** Follow `mergedInto` pointers during dedupe lookup. Preserve source keys and merge provenance.
+
+- **D18 · Configuration.** Store owner, time, source, cap, and hook preferences in one validated settings document. The panel and MCP update the same document. Area reads are bounded to 100 rows.
+- **D19 · Secret changes.** Keep deployment environment changes in the terminal. The settings panel shows the key-rotation command and only the existing key's last four characters. It holds no deployment-admin credential.

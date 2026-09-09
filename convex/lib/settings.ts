@@ -67,6 +67,11 @@ export function validateSettings(s: Settings): void {
 }
 
 export function mergeSettings(current: Settings, patch: SettingsPatch): Settings {
+  const caps = { ...current.caps };
+  for (const [key, value] of Object.entries(patch.caps ?? {})) {
+    if (value === null) delete caps[key as keyof typeof caps];
+    else if (value !== undefined) caps[key as keyof typeof caps] = value;
+  }
   const next: Settings = {
     ...current, ...patch,
     owner: { ...current.owner, ...patch.owner },
@@ -74,7 +79,7 @@ export function mergeSettings(current: Settings, patch: SettingsPatch): Settings
       eveningWatchFrom: patch.workday?.eveningWatchFrom === null ? undefined
         : patch.workday?.eveningWatchFrom ?? current.workday.eveningWatchFrom },
     hook: { ...current.hook, ...patch.hook },
-    caps: patch.caps === null ? undefined : { ...current.caps, ...patch.caps },
+    caps: patch.caps === null || !Object.keys(caps).length ? undefined : caps,
   };
   // Omitted properties must not appear in the persisted JSON as undefined.
   const clean = JSON.parse(JSON.stringify(next)) as Settings;

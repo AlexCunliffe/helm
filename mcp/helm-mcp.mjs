@@ -83,14 +83,14 @@ const settingsPatch = z.object({
     days: z.array(z.number()).optional(), eveningWatchFrom: z.string().nullable().optional() }).strict().optional(),
   caps: z.object(Object.fromEntries(["today", "wins", "ageing", "waiting", "upcoming", "newToday",
     "waitingAgeingDays", "openAgeingDays", "meetingPrepLeadMin", "focusMinutes"]
-    .map(key => [key, z.number().optional()]))).strict().nullable().optional(),
+    .map(key => [key, z.number().nullable().optional()]))).strict().nullable().optional(),
   sources: z.array(source).optional(),
   hook: z.object({ logSessions: z.boolean().optional(), includeCwd: z.boolean().optional(),
     titleChars: z.number().optional() }).strict().optional(),
 }).strict();
 forward("getSettings", "Read the owner's settings, timezone, tone, workday, caps, sources, and hook preferences. Call this first in each Helm skill.",
   {}, "query", "settings:get");
-forward("updateSettings", "Change the requested settings. Omitted fields stay unchanged. sources replaces the whole list. caps:null clears cap overrides; workday.eveningWatchFrom:null clears that override. Never put secrets in settings.",
+forward("updateSettings", "Change the requested settings. Omitted fields stay unchanged. sources replaces the whole list. caps:null clears all cap overrides; a null cap field clears just that override; workday.eveningWatchFrom:null clears that override. Never put secrets in settings.",
   { patch: settingsPatch }, "mutation", "settings:update");
 
 // ── writes ───────────────────────────────────────────────────────────────────

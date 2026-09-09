@@ -906,6 +906,10 @@ async function main() {
     await throws(() => m("meta:setMeta", { key: "settings", value: {} }),
       "settings: generic meta write cannot bypass validation");
     assert((await q("settings:get")).timezone === "America/New_York", "settings: rejected updates preserve data");
+    await m("settings:update", { patch: { caps: { focusMinutes: 40, today: 4 } } });
+    const singleReset = await m("settings:update", { patch: { caps: { focusMinutes: null } } });
+    assert(singleReset.caps.focusMinutes === undefined && singleReset.caps.today === 4,
+      "settings: one cap resets without deleting other overrides");
     const cleared = await m("settings:update", { patch: { caps: null, workday: { eveningWatchFrom: null } } });
     assert(cleared.caps === undefined && cleared.workday.eveningWatchFrom === undefined,
       "settings: optional overrides can be removed");
@@ -952,6 +956,25 @@ async function main() {
   assert(noSeed.inserted === 0 && noSeed.updated === 0, "seed: existing area set is untouched");
   await throws(() => m("areas:seedAreas", { areas: [AREA_PRESETS.generic[0], AREA_PRESETS.generic[0]] }), "seed: duplicate keys rejected");
   await throws(() => m("areas:seedAreas", { areas: [{ ...AREA_PRESETS.generic[0], color: "red" }] }), "seed: invalid colors rejected");
+
+  const editableArea = originalAreas[0];
+  await throws(() => m("areas:upsertArea", { key: editableArea.key, label: editableArea.label, color: "url(test)" }),
+    "areas: editor rejects invalid color");
+  await throws(() => m("areas:upsertArea", { key: editableArea.key, label: "", color: editableArea.color }),
+    "areas: editor rejects empty label");
+  await throws(() => m("areas:upsertArea", { key: editableArea.key, label: "Duplicate", color: editableArea.color, createOnly: true }),
+    "areas: create-only rejects an existing key atomically");
+  const retiredArea = originalAreas.find(a => !a.archived);
+  const oldDefault = await q("meta:getMeta", { key: "config:captureDefaultAreaKey" });
+  try {
+    await m("meta:setMeta", { key: "config:captureDefaultAreaKey", value: retiredArea.key });
+    await m("areas:upsertArea", { key: retiredArea.key, label: retiredArea.label, color: retiredArea.color, archived: true });
+    const fallback = await m("tasks:capture", { title: "TEST retired default area", dedupeKey: key("retired-area") });
+    assert((await q("tasks:get", { id: fallback.taskId })).areaId !== retiredArea._id, "areas: retired default falls back to an active area");
+  } finally {
+    await m("areas:upsertArea", { key: retiredArea.key, label: retiredArea.label, color: retiredArea.color, archived: false });
+    await m("meta:setMeta", { key: "config:captureDefaultAreaKey", value: oldDefault });
+  }
 
   // ── G · janitor proves itself ──
   console.log("\nG · purge");

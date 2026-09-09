@@ -2,6 +2,7 @@
  * Hydration + small predicates shared by the read API (docs/04). Surfaces get a
  * task with its area folded in so they never need a second query (docs/06).
  */
+import { readAreas } from "../areas";
 import { QueryCtx } from "../_generated/server";
 import { Doc, Id } from "../_generated/dataModel";
 
@@ -9,7 +10,7 @@ export type AreaMap = Map<Id<"areas">, Doc<"areas">>;
 
 /** Load every area once, keyed by id, for cheap in-memory hydration. */
 export async function loadAreaMap(ctx: QueryCtx): Promise<AreaMap> {
-  const areas = await ctx.db.query("areas").collect();
+  const areas = await readAreas(ctx);
   return new Map(areas.map((a) => [a._id, a]));
 }
 

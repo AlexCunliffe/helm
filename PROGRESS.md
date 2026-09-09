@@ -131,3 +131,19 @@ Checks: edit workday in the panel; observe geometry without reload; edit timezon
 The plan conflicts on key rotation: it limits secrets to CLI changes while requesting a browser rotation action. A clarification was requested. The conservative implementation shows the exact CLI command from the panel and does not grant the browser deployment-admin access.
 
 Done criteria: the settings and area forms persist through their validated APIs and the interface follows the live settings.
+
+### Slice 5 result
+
+Completed with the CLI rotation interpretation described above. All 187 development checks pass. MCP settings checks pass. A real browser verified live workday saves, timezone changes through MCP, cap save/reset, and area add/rename/recolor/retire. Unsaved input survives unrelated settings pushes. The stored key is never shown in the panel. Desktop and mobile screenshots were inspected; the mobile panel has no horizontal overflow.
+
+The browser test caught a save-completion race in the area editor. Form inputs now wait for the save to finish before accepting another edit. The rerun passed with no page errors. Area creation rejects an existing key atomically. Retiring the configured default falls back to another active area. Area reads and writes enforce a 100-area bound.
+
+## Stage 3 · Slice 6 plan: closed authentication
+
+Goal: require the API key by default. Permit anonymous development only through an explicit opt-out that warns on every call.
+
+Files: authentication helper, MCP warning text, development test plumbing, and exhaustive auth checks.
+
+Checks: enumerate every public function from development metadata; supply valid argument shapes; reject missing and wrong keys; remove key-related environment values and verify every public function returns unauthorized; keep the page public and data routes closed; verify repeated opt-out warnings; restore all credentials in memory; run the full regression.
+
+Done criteria: an unconfigured installation cannot read or mutate task data through public functions.

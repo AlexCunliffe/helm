@@ -509,6 +509,26 @@
   #gate .snote{background:var(--ground)}
   .promoted-tag.woke{color:var(--green);background:var(--green-bg)}
 
+
+  /* ---- settings panel ---- */
+  #settingsPanel{width:min(680px,calc(100vw - 24px));max-height:90vh;padding:0;border:1px solid #AAB6C2;border-radius:18px;background:var(--ground);color:var(--ink);box-shadow:var(--shadow-lift)}
+  #settingsPanel::backdrop{background:rgba(24,34,46,.38)}
+  .cfghead{display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;background:var(--card);padding:18px 24px;border-bottom:1px solid #AAB6C2;z-index:1}
+  .cfghead h2{font-size:21px;margin:0}.cfghead button{font-size:22px;min-width:36px;min-height:36px}
+  #settingsBody{padding:20px 24px}.cfgsection{background:var(--card);padding:20px;border:1px solid #AAB6C2;border-radius:12px;margin:0 0 18px}
+  .cfgsection h3{font-size:16px;margin:0 0 16px}.cfgsection h4{margin:0 0 14px;font-size:14px}
+  .cfggrid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.cfgfield{display:flex;flex-direction:column;gap:6px;margin:0 0 12px;font-size:12.5px;font-weight:600;color:var(--sub);min-width:0}
+  .cfgfield input,.cfgfield textarea,.cfgfield select{box-sizing:border-box;width:100%;min-width:0;border:1px solid #8F9EAD;border-radius:6px;background:#fff;color:var(--ink);padding:9px 10px;font:14px var(--sans)}
+  .cfgfield input[type=color]{height:39px;padding:4px}.cfgfield input[readonly]{background:var(--ground)}
+  .cfgfield textarea{resize:vertical;min-height:72px}.cfgfield :focus-visible,.cfgcheck input:focus-visible{outline:2px solid #2563EB;outline-offset:2px}
+  .cfgcheck{display:inline-flex;align-items:center;gap:7px;font-size:13px;color:var(--ink);margin:0 10px 10px 0}.cfgcheck input{accent-color:#2563EB}
+  .cfgdays{border:1px solid #8F9EAD;border-radius:6px;padding:12px 12px 0;margin:0}.cfgdays legend{font-size:12.5px;color:var(--sub);font-weight:600}
+  .cfgactions{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:12px}.cfgactions .mprim{margin:0;padding:9px 14px;background:#2563EB;color:#fff}
+  .cfgactions button{min-height:36px}.cfgstatus{font-size:12.5px;color:var(--sub)}.cfghint{color:var(--sub);font-size:12.5px;line-height:1.5;margin:12px 0}
+  .cfgsource{min-width:0;border:1px solid #8F9EAD;border-radius:8px;padding:14px;margin-bottom:16px}.cfgsource legend{font-weight:600;font-size:13px;padding:0 5px}
+  .cfgarea{border-top:1px solid #AAB6C2;padding:18px 0 4px}.cfgsection code{padding:8px 12px;background:var(--ground);display:block;overflow:auto}
+  @media(max-width:520px){.cfggrid{grid-template-columns:1fr}#settingsBody{padding:12px}.cfgsection{padding:16px}.cfghead{padding:14px 18px}.mast{flex-wrap:wrap}.watch{gap:10px;flex-wrap:wrap}}
+
   /* ---- toast & foot ---- */
   #toast{position:sticky;bottom:22px;margin:40px auto 0;width:fit-content;max-width:90%;
     background:var(--ink);border-radius:999px;color:#fff;
@@ -539,19 +559,20 @@
 <div class="wrap">
   <header class="mast rise d1 hideable h-up zone">
     <div class="wordmark"><span>⌖</span> Helm</div>
-    <div class="watch"><span id="clock">–:–</span><span><b id="streak">6</b>-day streak</span>
-      <button class="daybtn" onclick="toggleDay()" title="See today's timeline"><b id="doneN">4</b> done today</button>
+    <div class="watch"><span id="clock">–:–</span><span><b id="streak">0</b>-day streak</span>
+      <button class="daybtn" onclick="toggleDay()" title="See today's timeline"><b id="doneN">0</b> done today</button>
       <button class="iconbtn" onclick="openOmni()" title="Search or capture (⌘K)" aria-label="Search or capture">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.8-3.8"/></svg>
       </button>
+      <button class="iconbtn" onclick="openSettings()" title="Settings" aria-label="Settings">⚙</button>
       <button class="ebtn" id="ebtn" onclick="cycleEnergy()"
         title="Energy — click or press E to cycle" aria-label="Energy level"></button></div>
   </header>
   <p class="greet rise d1 hideable h-up zone" id="greet">One thing at a time.</p>
 
   <div class="thread rise d2 hideable h-up zone" aria-hidden="true">
-    <span class="tlabel" id="tStart" style="left:0%">08:00</span>
-    <span class="tlabel" id="tEnd" style="left:100%">17:00</span>
+    <span class="tlabel" id="tStart" style="left:0%">–:–</span>
+    <span class="tlabel" id="tEnd" style="left:100%">–:–</span>
     <div class="rail"></div>
     <div class="burn" id="burn" style="width:0%"></div>
     <div id="tmarks"></div>
@@ -607,11 +628,13 @@
     </div>
   </div>
 
+  <dialog id="settingsPanel" aria-labelledby="settingsTitle"><div class="cfghead"><h2 id="settingsTitle">Settings</h2><button type="button" class="iconbtn" onclick="closeSettings()" aria-label="Close settings">×</button></div><div id="settingsBody"></div></dialog>
+
   <div id="toast" role="status"></div>
 
   <footer class="foot rise d5 hideable h-down zone">
     <span><span class="kbd">D</span> done &nbsp;<span class="kbd">U</span> done + follow-up &nbsp;<span class="kbd">S</span> snooze &nbsp;<span class="kbd">W</span> swap &nbsp;<span class="kbd">F</span> focus &nbsp;<span class="kbd">E</span> energy &nbsp;<span class="kbd">⌘K</span> search + capture</span>
-    <span>Live — <b>queries:brief</b> paints the page by push; verbs write straight back</span>
+    <span>Changes appear automatically.</span>
   </footer>
 </div>
 
@@ -822,8 +845,72 @@ function subscribeAll(){
  sub('queries:inbox',{},r=>{S.inbox=r;render();});
  sub('queries:list',{includeSnoozed:true,limit:200},r=>{S.open=r;render();});
  sub('queries:list',{status:'someday',limit:100},r=>{S.someday=r;render();});
- qry('areas:listAreas').then(a=>{S.areas=a;}).catch(()=>{});
+ sub('areas:listAreas',{},a=>{S.areas=a;});
 }
+
+/* ═══ settings ═══ */
+const capOptions=[['today','Today selection',3,1,20],['wins','Small wins',5,0,100],['ageing','Ageing items',5,0,100],['waiting','Waiting items',10,0,100],['upcoming','Upcoming items',5,0,100],['newToday','New today',50,1,200],['waitingAgeingDays','Waiting age (days)',5,0,3650],['openAgeingDays','Open age (days)',14,0,3650],['meetingPrepLeadMin','Meeting prep (minutes)',30,0,1440],['focusMinutes','Focus (minutes)',25,1,240]];
+const field=(name,label,value='',type='text',extra='')=>`<label class="cfgfield">${esc(label)}<input name="${name}" type="${type}" value="${esc(value)}" ${extra}></label>`;
+const textField=(name,label,value,max)=>`<label class="cfgfield">${esc(label)}<textarea name="${name}" maxlength="${max}" rows="3">${esc(value)}</textarea></label>`;
+const formSection=(key,title,body)=>`<form class="cfgsection" data-section="${key}"><h3>${title}</h3>${body}<div class="cfgactions"><button class="mprim" type="submit">Save ${title.toLowerCase()}</button><span class="cfgstatus" role="status"></span></div></form>`;
+function sourceRow(s={key:'',label:'',kind:'custom',mcpServer:'',enabled:false,notes:''}){
+ return `<fieldset class="cfgsource"><legend>${esc(s.label||'New source')}</legend><div class="cfggrid">${field('key','Source key',s.key,'text','required pattern="[a-z][a-z0-9_-]{0,63}" maxlength="64"')}${field('label','Label',s.label,'text','required maxlength="120"')}<label class="cfgfield">Kind<select name="kind">${['email','chat','calendar','meetings','tracker','custom'].map(k=>`<option ${s.kind===k?'selected':''}>${k}</option>`).join('')}</select></label>${field('mcpServer','MCP server name',s.mcpServer||'','text','maxlength="120"')}</div>${textField('notes','Source notes',s.notes||'',2000)}<div class="cfgactions"><label class="cfgcheck"><input type="checkbox" name="enabled" ${s.enabled?'checked':''}>Enabled</label><button type="button" class="mini" data-remove-source>Remove source</button></div></fieldset>`;
+}
+function areaRow(a){
+ return `<form class="cfgarea" data-area="${esc(a.key)}"><div class="cfggrid">${field('key','Area key',a.key,'text','readonly')}${field('label','Label',a.label,'text','required maxlength="120"')}${field('color','Color',a.color,'color')}${field('order','Order',a.order,'number','required min="0" max="10000" step="1"')}</div>${field('vaultDomain','Vault reference (optional)',a.vaultDomain||'','text','maxlength="200"')}<div class="cfgactions"><label class="cfgcheck"><input name="archived" type="checkbox" ${a.archived?'checked':''}>Retired</label><button class="mini" type="submit">Save area</button><span class="cfgstatus" role="status"></span></div></form>`;
+}
+async function openSettings(){
+ if(gateOpen()||!settings)return;
+ if(paletteOpen())closeOmni();
+ const panel=$('#settingsPanel');panel.showModal();$('#settingsBody').innerHTML='<p>Loading settings…</p>';
+ try{
+  const [fresh,areas]=await Promise.all([qry('settings:get'),qry('areas:listAreas',{includeArchived:true})]);
+  renderSettings(fresh,areas);
+ }catch{ $('#settingsBody').textContent='Could not load settings. Close this panel and try again.'; }
+}
+function closeSettings(){ $('#settingsPanel').close(); }
+function renderSettings(s,areas){
+ $('#settingsBody').innerHTML=
+ formSection('owner','Owner',`<div class="cfggrid">${field('name','Name',s.owner.name,'text','maxlength="120"')}${field('shortName','Short name',s.owner.shortName,'text','maxlength="60"')}${field('role','Role',s.owner.role||'','text','maxlength="160"')}${field('business','Business',s.owner.business||'','text','maxlength="400"')}</div>${textField('tone','Tone',s.owner.tone,400)}`)+
+ formSection('context','Context',textField('founderContext','What should Helm know about your week?',s.founderContext,800))+
+ formSection('time','Time',`${field('timezone','Timezone',s.timezone,'text','required list="timezones" maxlength="100"')}<datalist id="timezones">${(Intl.supportedValuesOf?Intl.supportedValuesOf('timeZone'):['UTC','Europe/London']).map(t=>`<option value="${esc(t)}">`).join('')}</datalist><div class="cfggrid">${field('start','Workday start',s.workday.start,'time','required')}${field('end','Workday end',s.workday.end,'time','required')}${field('eveningWatchFrom','Evening watch (optional)',s.workday.eveningWatchFrom||'','time')}</div><fieldset class="cfgdays"><legend>Working days</legend>${['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map((day,i)=>`<label class="cfgcheck"><input name="days" type="checkbox" value="${i+1}" ${s.workday.days.includes(i+1)?'checked':''}>${day}</label>`).join('')}</fieldset><p class="cfghint">The workday must end after it starts on the same date. An empty evening watch uses the workday end.</p>`)+
+ formSection('caps','Limits',`<p class="cfghint">Leave a field empty to use its default.</p><div class="cfggrid">${capOptions.map(([key,label,fallback,min,max])=>field(key,label,s.caps?.[key]??'','number',`min="${min}" max="${max}" step="1" placeholder="Default: ${fallback}"`)).join('')}</div>`)+
+ formSection('sources','Sources',`<p class="cfghint">Enable a source after its MCP server is connected in Claude Code. Put read tools, filters, and timestamp rules in its notes. Keep keys and passwords out of these fields.</p><div id="cfgSources">${s.sources.map(sourceRow).join('')}</div><button type="button" class="mini" data-add-source>Add source</button>`)+
+ formSection('hook','Session logging',`<label class="cfgcheck"><input name="logSessions" type="checkbox" ${s.hook.logSessions?'checked':''}>Log completed Claude Code sessions</label><label class="cfgcheck"><input name="includeCwd" type="checkbox" ${s.hook.includeCwd?'checked':''}>Include the working directory</label>${field('titleChars','Maximum title characters',s.hook.titleChars,'number','required min="1" max="500" step="1"')}<p class="cfghint">Session logging sends part of the opening message to this Helm deployment. The hook must also be installed in Claude Code.</p>`)+
+ `<section class="cfgsection"><h3>Areas</h3><p class="cfghint">Retire an area to hide it from new selections. Existing tasks keep their area. Area keys stay fixed.</p><div id="cfgAreas">${areas.map(areaRow).join('')}</div><form id="cfgNewArea" class="cfgarea"><h4>Add an area</h4><div class="cfggrid">${field('key','Area key','','text','required pattern="[a-z][a-z0-9_-]{0,63}" maxlength="64"')}${field('label','Label','','text','required maxlength="120"')}${field('color','Color','#5B8DEF','color')}</div><div class="cfgactions"><button class="mini" type="submit">Add area</button><span class="cfgstatus" role="status"></span></div></form></section>`+
+ `<section class="cfgsection"><h3>Access</h3><p class="cfghint">This browser uses the key ending in <b>${esc(API_KEY.slice(-4))}</b>.</p><button class="mini" type="button" data-rotate-help>Rotate key</button><div id="rotateHelp" hidden><p>Run this command in your Helm clone:</p><code>npm run rotate-key</code><p class="cfghint">The command changes the development key and lists the clients to update. Reconnect this browser with the new key.</p></div></section>`;
+}
+$('#settingsBody').addEventListener('click',e=>{
+ if(e.target.closest('[data-add-source]'))$('#cfgSources').insertAdjacentHTML('beforeend',sourceRow());
+ const remove=e.target.closest('[data-remove-source]');if(remove)remove.closest('.cfgsource').remove();
+ if(e.target.closest('[data-rotate-help]'))$('#rotateHelp').hidden=false;
+});
+$('#settingsBody').addEventListener('submit',async e=>{
+ e.preventDefault();const form=e.target, data=new FormData(form), v=name=>String(data.get(name)??''), status=form.querySelector('.cfgstatus');
+ const controls=[...form.querySelectorAll('input,textarea,select,button')];controls.forEach(c=>c.disabled=true);status.textContent='Saving…';
+ try{
+  let patch;
+  switch(form.dataset.section){
+   case 'owner':patch={owner:Object.fromEntries(['name','shortName','role','business','tone'].map(k=>[k,v(k)]))};break;
+   case 'context':patch={founderContext:v('founderContext')};break;
+   case 'time':patch={timezone:v('timezone').trim(),workday:{start:v('start'),end:v('end'),days:data.getAll('days').map(Number),eveningWatchFrom:v('eveningWatchFrom')||null}};break;
+   case 'caps':patch={caps:Object.fromEntries(capOptions.map(([key])=>[key,v(key)===''?null:Number(v(key))]))};break;
+   case 'sources':patch={sources:[...form.querySelectorAll('.cfgsource')].map(row=>{const get=n=>row.querySelector(`[name="${n}"]`);return {key:get('key').value.trim(),label:get('label').value.trim(),kind:get('kind').value,mcpServer:get('mcpServer').value.trim(),notes:get('notes').value,enabled:get('enabled').checked};})};break;
+   case 'hook':patch={hook:{logSessions:data.has('logSessions'),includeCwd:data.has('includeCwd'),titleChars:Number(v('titleChars'))}};break;
+  }
+  if(patch){applySettings(await mut('settings:update',{patch}));status.textContent='Saved.';}
+  else if(form.matches('.cfgarea')){
+   const adding=form.id==='cfgNewArea';
+   await mut('areas:upsertArea',{key:v('key').trim(),label:v('label').trim(),color:v('color'),...(!adding?{order:Number(v('order')),archived:data.has('archived'),vaultDomain:v('vaultDomain')}:{createOnly:true} )});
+   const areas=await qry('areas:listAreas',{includeArchived:true});
+   const savedArea=areas.find(a=>a.key===v('key').trim());
+   if(adding){$('#cfgAreas').insertAdjacentHTML('beforeend',areaRow(savedArea));form.reset();status.textContent='Area added.';}
+   else{form.outerHTML=areaRow(savedArea);const updated=[...$('#cfgAreas').querySelectorAll('form')].find(f=>f.dataset.area===savedArea.key);updated.querySelector('.cfgstatus').textContent='Saved.';}
+  }
+ }catch(err){status.textContent=typeof err?.data==='string'?err.data:(err.message==='Choose an unused area key.'?err.message:'Could not save. Check the values and connection.');}
+ finally{controls.forEach(c=>c.disabled=false);}
+});
+
 
 /* ═══ render pipeline ═══ */
 function rebuild(){
@@ -1019,7 +1106,7 @@ function renderCard(cls){
    <div class="beacon" style="width:10px;height:10px"></div>
    <div class="big">${seeded?'All clear.':'Waking the glass…'}</div>
    <div class="sub">${seeded
-    ?'Nothing needs you right now. The sweep is watching — anything new lands here first.'
+    ?'Nothing is queued. Capture a task when you need it.'
     :'Connecting to the brain. One moment.'}</div>
   </div></div>`;return;}
  setAreaColor(color(t));
@@ -1192,7 +1279,7 @@ function renderDrawer(){
    return `<div class="drow" ${closed||parked||proposed(t)?'':`data-tid="${t._id}" data-dkind="queue"`}>
     <span class="dot" style="background:${color(t)}"></span><span>${esc(t.title)}</span>
     <span class="meta">${meta}</span>${action}</div>`;
-  }).join('')||`<div class="allhint">Nothing new yet today — the sweep is watching.</div>`;
+  }).join('')||`<div class="allhint">Nothing new yet today.</div>`;
  }else if(openDrawer==='all'){
   body=buildAllBody(true);
  }
@@ -2219,7 +2306,7 @@ function tickTime(){
 
 /* ═══ keyboard + pointer wiring ═══ */
 document.addEventListener('keydown',e=>{
- if(gateOpen())return;
+ if(gateOpen()||$('#settingsPanel').open)return;
  const k=e.key.toLowerCase();
  if(morningOpen()){if(e.key==='Escape'&&!e.target.matches('input,textarea'))morningFinish();return;}
  if((e.metaKey||e.ctrlKey)&&k==='k'){e.preventDefault();paletteOpen()?closeOmni():openOmni();return;}
@@ -2273,6 +2360,7 @@ document.querySelector('.thread').addEventListener('pointerdown',e=>{
 /* ═══ boot ═══ */
 window.addEventListener('beforeunload',()=>{if(client)client.close();});
 Object.assign(window,{
+ openSettings,closeSettings,
  gateGo,toggleDay,openOmni,closeOmni,renderOmni,omniKey,submitCapture,forceCapture,
  cycleEnergy,doDone,doSwap,toggleSnooze,doSnooze,startFocus,toggleKickoff,
  startSession,copyKick,toggleDrawer,setAllFilter,pullNow,bringNow,capNow,

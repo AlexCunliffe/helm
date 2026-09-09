@@ -11,6 +11,17 @@ import { requireKey } from "./lib/auth";
 
 const apiKeyArg = { apiKey: v.optional(v.string()) };
 
+export async function readAreas(ctx: QueryCtx) {
+  const rows = await ctx.db.query("areas").withIndex("by_key").take(101);
+  if (rows.length > 100) throw new ConvexError("Helm supports at most 100 areas.");
+  return rows;
+}
+function validateArea(a: { key: string; label: string; color: string; order: number; vaultDomain?: string }) {
+  if (!/^[a-z][a-z0-9_-]{0,63}$/.test(a.key) || !a.label.trim() || a.label.length > 120 ||
+      !/^#[0-9a-f]{6}$/i.test(a.color) || !Number.isSafeInteger(a.order) || a.order < 0 || a.order > 10000 || (a.vaultDomain?.length ?? 0) > 200)
+    throw new ConvexError("Use a lowercase area key, a label, a six-digit hex color, and an order from 0 to 10000.");
+}
+
 /**
  * Resolve an area key ("finance") → its id. Shared helper used by capture etc.
  * Throws on an unknown key so a typo can't silently mis-file a task.
@@ -21,7 +32,7 @@ export async function resolveAreaId(ctx: QueryCtx, key: string): Promise<Id<"are
     .withIndex("by_key", (q) => q.eq("key", key))
     .unique();
   if (!area) {
-    throw new Error(
+    throw new ConvexError(
       `Unknown area key "${key}". Seed it first (seedAreas / upsertArea) — areas are data, not code.`,
     );
   }
@@ -39,12 +50,13 @@ export async function defaultAreaId(ctx: QueryCtx): Promise<Id<"areas">> {
     .withIndex("by_key", (q) => q.eq("key", "config:captureDefaultAreaKey"))
     .unique();
   if (cfg && typeof cfg.value === "string") {
-    return await resolveAreaId(ctx, cfg.value);
+    const configured = await ctx.db.query("areas").withIndex("by_key", q => q.eq("key", cfg.value as string)).unique();
+    if (configured && !configured.archived) return configured._id;
   }
-  const areas = await ctx.db.query("areas").collect();
+  const areas = await readAreas(ctx);
   const live = areas.filter((a) => !a.archived).sort((a, b) => a.order - b.order);
   if (live.length === 0) {
-    throw new Error("No areas seeded — run seedAreas first.");
+    throw new ConvexError("No areas seeded — run seedAreas first.");
   }
   return live[0]._id;
 }
@@ -82,6 +94,8 @@ export async function seedAreaRows(ctx: MutationCtx, areas: Array<{ key: string;
       throw new ConvexError("Invalid area label, color, order, or vaultDomain.");
   }
   if (onlyIfEmpty && await ctx.db.query("areas").withIndex("by_key").first()) return { inserted: 0, updated: 0 };
+  const existingKeys = new Set((await readAreas(ctx)).map(a => a.key));
+  if (new Set([...existingKeys, ...keys]).size > 100) throw new ConvexError("Helm supports at most 100 areas.");
   let inserted = 0, updated = 0;
   for (const a of areas) {
     const existing = await ctx.db.query("areas").withIndex("by_key", q => q.eq("key", a.key)).unique();
@@ -101,26 +115,28 @@ export const upsertArea = mutation({
     vaultDomain: v.optional(v.string()),
     order: v.optional(v.number()),
     archived: v.optional(v.boolean()),
+    createOnly: v.optional(v.boolean()),
   },
   returns: v.id("areas"),
   handler: async (ctx, args) => {
     requireKey(args.apiKey);
     // apiKey is auth, not data — strip it before anything touches the row.
-    const { apiKey: _apiKey, ...area } = args;
+    const { apiKey: _apiKey, createOnly, ...area } = args;
     const existing = await ctx.db
       .query("areas")
       .withIndex("by_key", (q) => q.eq("key", area.key))
       .unique();
-    // Default order: append after the current max (so new areas land last).
+    if (createOnly && existing) throw new ConvexError("Choose an unused area key.");
+    const all = await readAreas(ctx);
+    const order = area.order ?? existing?.order ?? all.reduce((m, a) => Math.max(m, a.order), -1) + 1;
+    validateArea({ ...area, order });
+    if (!existing && all.length >= 100) throw new ConvexError("Helm supports at most 100 areas.");
+    if (area.archived && !all.some(a => a.key !== area.key && !a.archived))
+      throw new ConvexError("Keep at least one active area.");
     if (existing) {
       const { key: _key, ...patch } = area;
-      await ctx.db.patch(existing._id, patch);
+      await ctx.db.patch(existing._id, { ...patch, order });
       return existing._id;
-    }
-    let order = area.order;
-    if (order === undefined) {
-      const all = await ctx.db.query("areas").collect();
-      order = all.reduce((m, a) => Math.max(m, a.order), 0) + 1;
     }
     return await ctx.db.insert("areas", { ...area, order });
   },
@@ -132,7 +148,7 @@ export const listAreas = query({
   returns: v.array(areaDoc),
   handler: async (ctx, { apiKey, includeArchived }) => {
     requireKey(apiKey);
-    const areas = await ctx.db.query("areas").collect();
+    const areas = await readAreas(ctx);
     return areas
       .filter((a) => includeArchived || !a.archived)
       .sort((a, b) => a.order - b.order);
