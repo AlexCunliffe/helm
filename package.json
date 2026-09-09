@@ -3,17 +3,18 @@
   "version": "0.1.0",
   "private": false,
   "type": "module",
-  "description": "Helm — a founder's external executive function (task + accountability brain on Convex)",
+  "description": "Helm \u2014 a founder's external executive function (task + accountability brain on Convex)",
   "scripts": {
     "dev": "convex dev",
     "deploy": "convex deploy",
-    "test": "node scripts/regression.mjs",
+    "test": "node scripts/regression.mjs && node scripts/test-hook.mjs",
     "glass:embed": "node scripts/embed-glass.mjs",
     "oss:lint": "node scripts/oss-lint.mjs",
     "test:mcp": "node mcp/test-client.mjs",
     "seed": "node scripts/seed.mjs",
     "rotate-key": "node scripts/rotate-key.mjs",
-    "test:rotate-key": "node scripts/test-rotate-key.mjs"
+    "test:rotate-key": "node scripts/test-rotate-key.mjs",
+    "test:hook": "node scripts/test-hook.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.110.0",

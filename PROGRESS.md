@@ -195,3 +195,21 @@ Files: session-end hook, isolated HTTP fixtures, and development hook tests.
 Checks: default-off behavior; enabled logging; configured title length; directory opt-in; malformed input; missing session ID; invalid transcript path; network failures; silence and bounded shutdown; real development capture and fixture cleanup.
 
 Done criteria: default settings cause no session content to leave the hook, and enabled logging follows the configured limits.
+
+### Slice 9 result
+
+Completed. All 188 backend regressions pass, followed by the hook fixture and live development suites. Defaults produce no completion and send no session content. Enabled logging respects the configured title length, directory opt-in, provisional status, and session dedupe.
+
+Malformed or oversized input, missing IDs, invalid files, missing keys, explicit opt-out, server errors, and stalled responses all remain silent. The hook reads at most a bounded transcript head and rejects non-regular files. Test transcripts and development task fixtures were removed. No global hook was installed.
+
+## Stage 3 · Slice 10 plan: setup wizard
+
+Goal: configure owner, context, time, areas, sources, and security through six explicit steps. Support dry-run and repeatable non-secret answer files.
+
+Files: setup CLI, prompt helper, admin-only snapshot/validation queries, area application helper, and wizard tests.
+
+Checks: six step summaries and confirmations; dry-run leaves data, credentials, and files unchanged; saved answers apply end to end; re-run preserves keys and row IDs; invalid answers fail before writes; no secret output or secret file; full development regression with non-default area names.
+
+Because authentication is now closed, the wizard collects approvals before applying changes. It creates missing credentials first, then applies the approved data. This keeps the six user-facing steps while allowing the first installation to authenticate. Existing credentials remain unchanged on a re-run.
+
+Done criteria: the approved configuration is applied and verified without exposing secrets or modifying user-global files.

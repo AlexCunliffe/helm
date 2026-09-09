@@ -1,146 +1,74 @@
 #!/usr/bin/env node
-/**
- * Helm SessionEnd hook (Phase 1).
- *
- * On every Claude Code session end, logs ONE provisional completion to Helm so
- * unplanned / rabbit-hole work isn't lost (docs/01, docs/10). It's a blunt
- * backstop — the intelligent path is the global CLAUDE.md rule, where Claude
- * logs real completions during the session. Marked `provisional:true` and
- * deduped by session id, so the evening reconcile can refine/merge/drop it
- * (docs/08: operational auto-write to Convex is fine; knowledge never is).
- *
- * Zero-dependency: a single fetch to the deployment's public mutation endpoint,
- * so it can't break a session or need an install. It NEVER throws and ALWAYS
- * exits 0 — a hook must never wedge session shutdown.
- *
- * Config (env): HELM_CONVEX_URL (required, the deployment client URL).
- *               HELM_API_KEY (required once the deployment enforces keys — 4.1/D15).
- *               HELM_HOOK_DISABLED=1 to opt out.
- */
-
+/** Optional SessionEnd backstop. Reads preferences before reading session content.
+ * HELM_CONVEX_URL and HELM_API_KEY are required. HELM_HOOK_DISABLED=1 skips it.
+ * Every failure is silent. The process has a fixed shutdown deadline. */
+import { openSync, readSync, closeSync, fstatSync, constants } from "node:fs";
+const deadline = setTimeout(() => process.exit(0), 5000);
+deadline.unref();
 function readStdin() {
-  return new Promise((resolve) => {
-    let data = "";
-    let done = false;
-    const finish = () => {
-      if (done) return;
-      done = true;
-      resolve(data);
-    };
+  return new Promise(resolve => {
+    let text = "", finished = false;
+    const finish = value => { if (finished) return; finished = true; clearTimeout(timer); resolve(value); };
+    const timer = setTimeout(() => finish(null), 1000);
     process.stdin.setEncoding("utf8");
-    process.stdin.on("data", (c) => (data += c));
-    process.stdin.on("end", finish);
-    process.stdin.on("error", finish);
-    // Belt-and-braces: if nothing ever pipes in, resolve anyway so shutdown
-    // can't hang. The timer fires while stdin keeps the loop alive; unref so it
-    // can't itself keep the process up.
-    const t = setTimeout(finish, 1500);
-    if (typeof t.unref === "function") t.unref();
+    process.stdin.on("data", chunk => { text += chunk; if (text.length > 65536) finish(null); });
+    process.stdin.on("end", () => finish(text));
+    process.stdin.on("error", () => finish(null));
   });
 }
-
-/**
- * Best-effort: the session's opening user message = its intent. The first user
- * message is at the TOP of the transcript, so read only a bounded head — never
- * load a multi-MB (or pathological) transcript fully into memory.
- */
-async function deriveIntent(transcriptPath) {
-  if (!transcriptPath) return null;
+function intent(path, limit) {
+  if (typeof path !== "string" || !path || path.length > 4096) return null;
+  let fd;
   try {
-    const fs = await import("node:fs");
-    const HEAD_BYTES = 256 * 1024; // enough to reach the first user turn
-    const fd = fs.openSync(transcriptPath, "r");
-    let text;
-    try {
-      const buf = Buffer.alloc(HEAD_BYTES);
-      const n = fs.readSync(fd, buf, 0, HEAD_BYTES, 0);
-      text = buf.toString("utf8", 0, n);
-    } finally {
-      fs.closeSync(fd);
+    // Non-blocking + regular-file check prevents FIFO/device paths from wedging shutdown.
+    fd = openSync(path, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0) | (constants.O_NONBLOCK ?? 0));
+    if (!fstatSync(fd).isFile()) return null;
+    const buffer = Buffer.alloc(256 * 1024);
+    const length = readSync(fd, buffer, 0, buffer.length, 0);
+    for (const line of buffer.toString("utf8", 0, length).split("\n")) {
+      let row; try { row = JSON.parse(line); } catch { continue; }
+      if (row?.type !== "user") continue;
+      const content = row.message?.content ?? row.content;
+      const text = typeof content === "string" ? content : Array.isArray(content)
+        ? content.filter(block => block?.type === "text" && typeof block.text === "string").map(block => block.text).join(" ") : "";
+      const clean = text.trim();
+      if (!clean || clean.startsWith("<") || clean.startsWith("/")) continue;
+      return Array.from(clean.replace(/\s+/g, " ")).slice(0, limit).join("");
     }
-    // Drop a trailing partial line so JSON.parse doesn't choke on it.
-    const lines = text.split("\n");
-    if (!text.endsWith("\n")) lines.pop();
-    for (const line of lines) {
-      let o;
-      try {
-        o = JSON.parse(line);
-      } catch {
-        continue;
-      }
-      if (o?.type !== "user") continue;
-      const content = o.message?.content ?? o.content;
-      let s = null;
-      if (typeof content === "string") s = content;
-      else if (Array.isArray(content)) {
-        const block = content.find((b) => b?.type === "text" && typeof b.text === "string");
-        s = block?.text ?? null;
-      }
-      if (s) {
-        s = s.trim();
-        // skip slash-command / hook-injected noise
-        if (s.startsWith("<") || s.startsWith("/")) continue;
-        return s.replace(/\s+/g, " ").slice(0, 140);
-      }
-    }
-  } catch {
-    /* ignore */
-  }
+  } catch { /* best effort */ }
+  finally { if (fd !== undefined) try { closeSync(fd); } catch { /* best effort */ } }
   return null;
 }
-
 async function main() {
-  const url = process.env.HELM_CONVEX_URL;
-  if (!url || process.env.HELM_HOOK_DISABLED) return;
-
-  let payload = {};
-  try {
-    payload = JSON.parse((await readStdin()) || "{}");
-  } catch {
-    payload = {};
+  const apiKey = process.env.HELM_API_KEY;
+  if (!apiKey || !process.env.HELM_CONVEX_URL || process.env.HELM_HOOK_DISABLED === "1") return;
+  const url = new URL(process.env.HELM_CONVEX_URL);
+  const cloud = url.protocol === "https:" && url.hostname.endsWith(".convex.cloud");
+  const loopback = url.protocol === "http:" && ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname);
+  if ((!cloud && !loopback) || url.username || url.password || url.search || url.hash || url.pathname !== "/") return;
+  const input = await readStdin(); if (!input) return;
+  const payload = JSON.parse(input);
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return;
+  const session = payload.session_id ?? payload.sessionId;
+  if (typeof session !== "string" || !session.trim() || session.length > 200) return;
+  const signal = AbortSignal.timeout(3500);
+  async function request(kind, path, args) {
+    const response = await fetch(`${url.origin}/api/${kind}`, { method: "POST",
+      headers: { "Content-Type": "application/json" }, signal,
+      body: JSON.stringify({ path, format: "json", args: { ...args, apiKey } }) });
+    if (!response.ok) return null;
+    const result = await response.json();
+    return result.status === "success" ? result.value : null;
   }
-
-  const sessionId = payload.session_id ?? payload.sessionId ?? "unknown";
-  const cwd = payload.cwd ?? payload.workspace ?? "";
-  const intent = await deriveIntent(payload.transcript_path ?? payload.transcriptPath);
-
-  // Nothing to say (empty/trivial session) → don't add noise.
-  if (!intent) return;
-
-  const project = cwd ? cwd.split("/").filter(Boolean).pop() : null;
-  const body = {
-    path: "tasks:logCompletion",
-    format: "json",
-    args: {
-      ...(process.env.HELM_API_KEY ? { apiKey: process.env.HELM_API_KEY } : {}),
-      title: intent,
-      source: "claude-hook",
-      provisional: true,
-      contextLine: project
-        ? `Claude Code session in ${project} (${cwd})`
-        : "Claude Code session",
-      dedupeKey: `session:${sessionId}`,
-    },
-  };
-
-  // Portable timeout (AbortSignal.timeout may be missing on older Node) so a
-  // slow/unreachable deployment can never hang session shutdown.
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 4000);
-  try {
-    const res = await fetch(`${url.replace(/\/$/, "")}/api/mutation`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-      signal: controller.signal,
-    });
-    // Drain quietly; success or not, we exit 0.
-    await res.text().catch(() => {});
-  } catch {
-    /* network/best-effort: never block shutdown */
-  } finally {
-    clearTimeout(timer);
-  }
+  const settings = await request("query", "settings:get", {});
+  const hook = settings?.hook;
+  if (hook?.logSessions !== true || !Number.isInteger(hook.titleChars) || hook.titleChars < 1 || hook.titleChars > 500) return;
+  const title = intent(payload.transcript_path ?? payload.transcriptPath, hook.titleChars);
+  if (!title) return;
+  const cwd = payload.cwd ?? payload.workspace;
+  const includePath = hook.includeCwd === true && typeof cwd === "string" && cwd.length > 0 && cwd.length <= 4096;
+  await request("mutation", "tasks:logCompletion", { title, source: "claude-hook", provisional: true,
+    contextLine: includePath ? `Claude Code session in ${cwd}` : "Claude Code session",
+    dedupeKey: `session:${session}` });
 }
-
-main().finally(() => process.exit(0));
+main().catch(() => {}).finally(() => process.exit(0));
