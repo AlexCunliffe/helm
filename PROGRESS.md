@@ -213,3 +213,19 @@ Checks: six step summaries and confirmations; dry-run leaves data, credentials, 
 Because authentication is now closed, the wizard collects approvals before applying changes. It creates missing credentials first, then applies the approved data. This keeps the six user-facing steps while allowing the first installation to authenticate. Existing credentials remain unchanged on a re-run.
 
 Done criteria: the approved configuration is applied and verified without exposing secrets or modifying user-global files.
+
+### Slice 10 result
+
+Completed. The development push and TypeScript check pass. Wizard acceptance passed twice. All six approvals can be declined without changes. Approving only the owner step preserves the declined sections. Dry-run preserves configuration, credentials, and local files. Invalid settings and secret-shaped answer fields fail before writes or disclosure.
+
+The wizard created missing API and surface credentials, applied a custom configuration, and preserved credentials and area IDs on a re-run. The full regression and hook suites passed with custom area names. Test configuration and credentials were restored. No user-global files were changed.
+
+## Stage 3 · Slice 11 plan: Claude installer
+
+Goal: install and remove Claude integration through per-file previews, confirmations, and backups. Keep all acceptance runs inside a scratch home directory.
+
+Files: install and uninstall commands, shared file-safety and manifest helpers, namespaced skill copies, ambient-capture template, and scratch-home acceptance tests.
+
+Checks: show every proposed global write; decline without writes; dry-run and check preserve all files; register MCP through the Claude CLI in an isolated staging home; preserve unrelated configuration; skip disabled hooks; retain backups; detect drift; refuse to overwrite later user edits on uninstall; restore the original files; redact credentials in all output.
+
+Done criteria: a scratch installation works and uninstall restores the prior configuration. The installer makes no deployment changes; the approved setup wizard owns that tier.

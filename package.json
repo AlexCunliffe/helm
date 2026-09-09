@@ -14,7 +14,9 @@
     "seed": "node scripts/seed.mjs",
     "rotate-key": "node scripts/rotate-key.mjs",
     "test:rotate-key": "node scripts/test-rotate-key.mjs",
-    "test:hook": "node scripts/test-hook.mjs"
+    "test:hook": "node scripts/test-hook.mjs",
+    "setup": "node scripts/setup.mjs",
+    "test:setup": "node scripts/test-setup.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.110.0",

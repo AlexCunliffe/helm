@@ -16,7 +16,7 @@ export async function readAreas(ctx: QueryCtx) {
   if (rows.length > 100) throw new ConvexError("Helm supports at most 100 areas.");
   return rows;
 }
-function validateArea(a: { key: string; label: string; color: string; order: number; vaultDomain?: string }) {
+export function validateArea(a: { key: string; label: string; color: string; order: number; vaultDomain?: string }) {
   if (!/^[a-z][a-z0-9_-]{0,63}$/.test(a.key) || !a.label.trim() || a.label.length > 120 ||
       !/^#[0-9a-f]{6}$/i.test(a.color) || !Number.isSafeInteger(a.order) || a.order < 0 || a.order > 10000 || (a.vaultDomain?.length ?? 0) > 200)
     throw new ConvexError("Use a lowercase area key, a label, a six-digit hex color, and an order from 0 to 10000.");

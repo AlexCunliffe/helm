@@ -18,6 +18,7 @@
  * completes), status-verb side-effects, read API invariants, London
  * day-boundary via backdated completions, past-date check-ins.
  */
+import { randomUUID } from "node:crypto";
 import { execFileSync as rawExecFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
@@ -43,6 +44,8 @@ function execFileSync(command, args, options = {}) {
   return result;
 }
 const PREFIX = "test:reg:";
+let testAreas;
+const extraFixtureAreas=[];
 const SAFE_DATE = "2026-01-15"; // pre-Helm London day — no real data can live here
 const SAFE_NOON = Date.UTC(2026, 0, 15, 12); // London == UTC in January
 const SAFE_DATE2 = "2026-01-20"; // second pre-Helm day for the H5 healing tests
@@ -104,6 +107,14 @@ const key = (s) => `${PREFIX}${s}`;
 async function main() {
   console.log(`regression → ${CONVEX_URL}`);
   purge(); // clear any residue from a previous failed run
+  const liveAreas = await q("areas:listAreas");
+  if (!liveAreas.length) throw new Error("Seed at least one area before running tests.");
+  if (liveAreas.length === 1) {
+    const area = {key:"test-reg-"+randomUUID(),label:"Test secondary area",color:"#345678"};
+    await m("areas:upsertArea", {...area,createOnly:true}); extraFixtureAreas.push(area.key); liveAreas.push(area);
+  }
+  const finance = (liveAreas.find(a=>a.key==="finance") ?? liveAreas.find(a=>a.key!=="work") ?? liveAreas[0]).key;
+  testAreas = {finance,work:(liveAreas.find(a=>a.key==="work") ?? liveAreas.find(a=>a.key!==finance) ?? liveAreas[0]).key};
 
   // ── A · capture basics ──
   console.log("\nA · capture basics");
@@ -117,13 +128,13 @@ async function main() {
 
   const a2 = await m("tasks:capture", {
     title: "TEST waiting stamp", dedupeKey: key("a2"),
-    areaKey: "finance", status: "waiting", waitingOn: "Sam",
+    areaKey: testAreas.finance, status: "waiting", waitingOn: "Sam",
   });
   const a2doc = await q("tasks:get", { id: a2.taskId });
   assert(a2doc.waitingSince !== undefined, "capture: status waiting stamps waitingSince");
   assert(a2doc.waitingOn === "Sam", "capture: waitingOn stored");
 
-  await throws(() => m("tasks:capture", { title: "TEST bad area", dedupeKey: key("a3"), areaKey: "nope" }),
+  await throws(() => m("tasks:capture", { title: "TEST bad area", dedupeKey: key("a3"), areaKey: "test-reg-missing-"+randomUUID() }),
     "capture: unknown areaKey throws (no silent mis-file)");
   await throws(() => m("tasks:capture", { title: "TEST done mint", dedupeKey: key("a4"), status: "done" }),
     "capture: status done rejected (completions only via logCompletion)");
@@ -341,8 +352,8 @@ async function main() {
 
   const eLim = await q("queries:list", { status: "inbox", limit: 1 });
   assert(eLim.length <= 1, "list: limit respected");
-  const eArea = await q("queries:list", { areaKey: "finance", limit: 200 });
-  assert(eArea.every((t) => t.area.key === "finance"), "list: area filter exact");
+  const eArea = await q("queries:list", { areaKey: testAreas.finance, limit: 200 });
+  assert(eArea.every((t) => t.area.key === testAreas.finance), "list: area filter exact");
 
   // ── F · past-date check-ins (real data untouched) ──
   console.log("\nF · check-ins on a past date");
@@ -548,7 +559,7 @@ async function main() {
   // ── M · delegate (4.6, D11) ──
   console.log("\nM · delegate (4.6)");
   const del1 = await m("tasks:capture", {
-    title: "TEST chase the credit note", dedupeKey: key("del1"), areaKey: "finance",
+    title: "TEST chase the credit note", dedupeKey: key("del1"), areaKey: testAreas.finance,
   });
   const del2 = await m("tasks:capture", { title: "TEST book the courier", dedupeKey: key("del2") });
   const delDone = await m("tasks:logCompletion", { title: "TEST already finished", dedupeKey: key("del3") });
@@ -717,7 +728,7 @@ async function main() {
   // Merge: newer source folds into older target; context unioned; provenance kept.
   const pt = await m("tasks:capture", {
     title: "TEST service retry alert", dedupeKey: key("pt"),
-    note: "3 overnight retries", areaKey: "work",
+    note: "3 overnight retries", areaKey: testAreas.work,
   });
   await new Promise((r) => setTimeout(r, 5));
   const ps = await m("tasks:capture", {
@@ -794,13 +805,13 @@ async function main() {
   // with the semantic dedupe key → connect → snooze if the draft carried timing.
   const q1 = await m("tasks:capture", {
     title: "TEST follow up with sales lead", dedupeKey: key("q1"),
-    areaKey: "work", contextLine: "sent the quote Tuesday, no reply yet",
+    areaKey: testAreas.work, contextLine: "sent the quote Tuesday, no reply yet",
   });
   await m("tasks:markDone", { id: q1.taskId });
   const fupKey = key("fup:") + q1.taskId + ":call-the-sales-lead-by-phone";
   const q2 = await m("tasks:capture", {
     title: "TEST call the sales lead by phone", dedupeKey: fupKey,
-    areaKey: "work", status: "next", source: "followup",
+    areaKey: testAreas.work, status: "next", source: "followup",
     contextLine: "Quote sent + chased; call if still quiet.",
   });
   assert(q2.created === true, "follow-up: fresh semantic key mints the task");
@@ -971,6 +982,7 @@ try {
 } finally {
   try {
     purge(); // always leave dev clean, even after a mid-suite crash
+    if(extraFixtureAreas.length)devTarget.cli(["run","testing:removeFixtureAreas",JSON.stringify({keys:extraFixtureAreas})]);
   } catch (err) {
     console.error("regression: final purge failed —", redact(err?.message ?? err));
   }
