@@ -22,7 +22,8 @@ import {
 import { resolveAreaId, defaultAreaId } from "./areas";
 import { isClosed } from "./lib/views";
 import { requireKey } from "./lib/auth";
-import { londonDateString } from "./lib/time";
+import { dateString } from "./lib/time";
+import { readSettings } from "./lib/settings";
 
 // Every public function takes this and calls requireKey first (4.1, D15).
 const apiKeyArg = { apiKey: v.optional(v.string()) };
@@ -359,7 +360,8 @@ export const wakeExpired = internalMutation({
     // (computeToday reads it first). Created machine-authored if absent —
     // chosen IS the Now order, however it came to be.
     if (promoted.length) {
-      const today = londonDateString(now);
+      const settings = await readSettings(ctx);
+      const today = dateString(now, settings.timezone);
       const checkins = await ctx.db
         .query("checkins")
         .withIndex("by_date", (q) => q.eq("date", today))
@@ -475,6 +477,7 @@ export const delegate = mutation({
   handler: async (ctx, { apiKey, taskIds, person, note, dedupeKey }) => {
     requireKey(apiKey);
     const now = Date.now();
+    const settings = await readSettings(ctx);
     const who = person ?? "someone";
 
     const handedOver: Doc<"tasks">[] = [];
@@ -507,7 +510,7 @@ export const delegate = mutation({
       contextLine: `${titles.length} task${titles.length > 1 ? "s" : ""} parked on ${who} — they're waiting on the handover.`,
       kickoffPrompt:
         `Draft a short, warm handover message to ${who} covering: ${titles.join("; ")}. ` +
-        `Include what "done" looks like for each and when the user needs it. the user's tone: plain, British, no em dashes.`,
+        `Include what "done" looks like for each and when it is needed. Tone: ${settings.owner.tone}.`,
       dedupeKey,
       updatedAt: now,
     });

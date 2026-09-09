@@ -19,7 +19,8 @@
  */
 import Anthropic from "@anthropic-ai/sdk";
 import { action } from "./_generated/server";
-import { api } from "./_generated/api";
+import { api, internal } from "./_generated/api";
+import type { Settings } from "./lib/settings";
 import { v } from "convex/values";
 import { requireKey } from "./lib/auth";
 import { sizeValidator, statusValidator, originValidator } from "./validators";
@@ -63,9 +64,13 @@ async function structured<T>(
   return JSON.parse(text.text) as T;
 }
 
-const HELM_CONTEXT =
-  "Helm is a personal task system. Use plain language for one-line tasks. " +
-  "Sizes: xs = a ~2-minute win, m = a normal focus block, l = deep work.";
+function helmContext(settings: Settings): string {
+  const owner = settings.owner;
+  return `Helm is a personal task system for ${owner.shortName || owner.name || "the user"}. ` +
+    (owner.role ? `Role: ${owner.role}. ` : "") + (owner.business ? `Business: ${owner.business}. ` : "") +
+    `Tone: ${owner.tone}. Context: ${settings.founderContext}. ` +
+    "Sizes: xs = a ~2-minute win, m = a normal focus block, l = deep work.";
+}
 
 // ── enrichCapture ────────────────────────────────────────────────────────────
 
@@ -79,6 +84,7 @@ export const enrichCapture = action({
   }),
   handler: async (ctx, { apiKey, title, note }) => {
     requireKey(apiKey);
+    const settings: Settings = await ctx.runQuery(internal.settings.getInternal, {});
     const areas: Array<{ key: string; label: string }> = await ctx.runQuery(
       api.areas.listAreas,
       { apiKey },
@@ -91,7 +97,7 @@ export const enrichCapture = action({
       contextLine: string;
       kickoffPrompt: string;
     }>(
-      `${HELM_CONTEXT}\nYou enrich a freshly captured task so it files itself. ` +
+      `${helmContext(settings)}\nYou enrich a freshly captured task so it files itself. ` +
         `Areas (key: label): ${areas.map((a) => `${a.key}: ${a.label}`).join(", ")}. ` +
         `contextLine = one line (≤140 chars) of "where this is at" — the fact that kills ` +
         `re-entry cost. kickoffPrompt = a ready-to-run instruction Claude Code could execute ` +
@@ -123,10 +129,11 @@ export const polishNote = action({
     previousContextLine: v.optional(v.string()),
   },
   returns: v.object({ contextLine: v.string() }),
-  handler: async (_ctx, { apiKey, title, note, previousContextLine }) => {
+  handler: async (ctx, { apiKey, title, note, previousContextLine }) => {
     requireKey(apiKey);
-    const londonTime = new Intl.DateTimeFormat("en-GB", {
-      timeZone: "Europe/London",
+    const settings: Settings = await ctx.runQuery(internal.settings.getInternal, {});
+    const localTime = new Intl.DateTimeFormat("en-GB", {
+      timeZone: settings.timezone,
       hour: "2-digit",
       minute: "2-digit",
     }).format(new Date());
@@ -135,11 +142,11 @@ export const polishNote = action({
     // model returns the PARTS and the line is composed here — the shape can't
     // be dropped, doubled, or half-followed the way free-prose output can.
     const parts = await structured<{ happened: string; next: string }>(
-      `${HELM_CONTEXT}\nThe user is pausing a task and jotted a raw progress note. It becomes the ` +
-        `task's re-entry contextLine: "Paused ${londonTime} — <happened>. Next: <next>." ` +
+      `${helmContext(settings)}\nThe user is pausing a task and jotted a raw progress note. It becomes the ` +
+        `task's re-entry contextLine: "Paused ${localTime} — <happened>. Next: <next>." ` +
         `You return the two parts. happened = what happened, cleaned, past tense, warm and ` +
         `plain (≤120 chars, no leading "Paused"). next = the inferred next step, imperative ` +
-        `(≤60 chars). Written at maximum context, read at minimum context — future the user must ` +
+        `(≤60 chars). Written at maximum context, read at minimum context — the user must ` +
         `resume from this line alone.`,
       `Task: ${title}\nRaw note: ${note}` +
         (previousContextLine ? `\nPrevious context line: ${previousContextLine}` : ""),
@@ -152,7 +159,7 @@ export const polishNote = action({
       300,
     );
     const dot = (s: string) => (/[.!?]$/.test(s.trim()) ? s.trim() : s.trim() + ".");
-    return { contextLine: `Paused ${londonTime} — ${dot(parts.happened)} Next: ${dot(parts.next)}` };
+    return { contextLine: `Paused ${localTime} — ${dot(parts.happened)} Next: ${dot(parts.next)}` };
   },
 });
 
@@ -180,8 +187,9 @@ export const draftFollowUp = action({
     kickoffPrompt: v.string(),
     wakeInHours: v.number(), // 0 = actionable now; >0 = park until then
   }),
-  handler: async (_ctx, { apiKey, originalTitle, originalContext, instruction }) => {
+  handler: async (ctx, { apiKey, originalTitle, originalContext, instruction }) => {
     requireKey(apiKey);
+    const settings: Settings = await ctx.runQuery(internal.settings.getInternal, {});
     const draft = await structured<{
       title: string;
       size: "xs" | "m" | "l";
@@ -189,11 +197,11 @@ export const draftFollowUp = action({
       kickoffPrompt: string;
       wakeInHours: number;
     }>(
-      `${HELM_CONTEXT}\nThe user just completed a task and wants a follow-up minted from one short ` +
+      `${helmContext(settings)}\nThe user just completed a task and wants a follow-up minted from one short ` +
         `instruction. Draft the follow-up task. title = one imperative line (the follow-up ` +
         `action itself, not "follow up on X" if the instruction is more specific). ` +
         `contextLine = one line (≤140 chars) of "where this is at", referencing what the ` +
-        `completed task established — future the user resumes from this line alone. ` +
+        `completed task established — the user resumes from this line alone. ` +
         `kickoffPrompt = a ready-to-run instruction Claude Code could execute (imperative, ` +
         `self-contained, 1–3 sentences). wakeInHours = when this should SURFACE, in hours from ` +
         `now, taken from the instruction's timing ("in 3 days" → 72, "next week" → 168, ` +
@@ -238,6 +246,7 @@ export const parseSearch = action({
   }),
   handler: async (ctx, { apiKey, question }) => {
     requireKey(apiKey);
+    const settings: Settings = await ctx.runQuery(internal.settings.getInternal, {});
     const areas: Array<{ key: string; label: string }> = await ctx.runQuery(
       api.areas.listAreas,
       { apiKey },
@@ -252,7 +261,7 @@ export const parseSearch = action({
       includeSnoozed: string;
       explanation: string;
     }>(
-      `${HELM_CONTEXT}\nTranslate a natural-language question about the user's tasks into list ` +
+      `${helmContext(settings)}\nTranslate a natural-language question about the user's tasks into list ` +
         `filters. Statuses: inbox (captured, untriaged), today (chosen for today), next ` +
         `(queued), waiting (blocked on someone else), someday (deferred), done, dropped. ` +
         `origin: planned = forward intentions, adhoc = after-the-fact completions. ` +

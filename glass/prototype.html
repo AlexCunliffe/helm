@@ -628,7 +628,34 @@ import { ConvexClient } from "https://esm.sh/convex@1.42.0/browser";
 const $=s=>document.querySelector(s);
 const esc=s=>String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 const DAY=86400000,MIN=60000;
-const hhmm=d=>d.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
+let settings=null;
+const zone=()=>settings?settings.timezone:'UTC';
+const clockMin=s=>{const [h,m]=s.split(':').map(Number);return h*60+m;};
+const workStart=()=>clockMin(settings?settings.workday.start:'00:00');
+const workEnd=()=>clockMin(settings?settings.workday.end:'23:59');
+const eveningFrom=()=>clockMin(settings?(settings.workday.eveningWatchFrom||settings.workday.end):'23:59');
+const dayAt=ts=>{const parts=new Intl.DateTimeFormat('en',{timeZone:zone(),year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(ts);
+ const p=t=>parts.find(x=>x.type===t).value;return `${p('year')}-${p('month')}-${p('day')}`;};
+const shiftDay=(day,n)=>new Date(Date.parse(day+'T12:00:00Z')+n*DAY).toISOString().slice(0,10);
+const weekDay=ts=>new Date(dayAt(ts)+'T12:00:00Z').getUTCDay()||7;
+const workingDay=ts=>!!settings&&settings.workday.days.includes(weekDay(ts));
+// Resolve wall-clock minutes in the configured zone, including offset changes.
+function wallTime(day,minutes){
+ const target=day+'T'+fmtMin(minutes),guess=Date.parse(day+'T00:00:00Z')+minutes*MIN;
+ let lo=guess-2*DAY,hi=guess+2*DAY;
+ while(lo<hi){const mid=Math.floor((lo+hi)/2);
+  const wall=dayAt(mid)+'T'+hhmm(new Date(mid));
+  if(wall<target)lo=mid+1;else hi=mid;}
+ return lo;
+}
+function applySettings(next){
+ const changed=settings&&JSON.stringify(settings.workday)!==JSON.stringify(next.workday);
+ const changedZone=settings&&settings.timezone!==next.timezone;
+ settings=next;FOCUS_TOTAL=(next.caps?.focusMinutes??25)*60;
+ if(changed||changedZone)eveningStartUI=null;
+ tickTime();renderFocusRow();render();
+}
+const hhmm=d=>d.toLocaleTimeString('en-GB',{timeZone:zone(),hour:'2-digit',minute:'2-digit',hourCycle:'h23'});
 const mmss=s=>`${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`;
 const fmtMin=x=>{const v=((x%1440)+1440)%1440;
  return String(Math.floor(v/60)).padStart(2,'0')+':'+String(v%60).padStart(2,'0');};
@@ -637,9 +664,9 @@ const fmtDur=ms=>{const s=Math.max(0,Math.round(ms/1000));if(s<60)return s+'s';
  const h=Math.floor(m/60);return m%60?`${h}h ${m%60}m`:`${h}h`;};
 const fmtAge=ms=>{if(ms<0)ms=0;const d=Math.floor(ms/DAY);if(d>=1)return d+'d';
  const h=Math.floor(ms/3600000);if(h>=1)return h+'h';return Math.max(1,Math.round(ms/MIN))+'m';};
-const sameLocalDay=(a,b)=>a.toDateString()===b.toDateString();
+const sameLocalDay=(a,b)=>dayAt(a.getTime())===dayAt(b.getTime());
 const fmtWake=ts=>{const d=new Date(ts);return sameLocalDay(d,new Date())?hhmm(d)
- :d.toLocaleDateString('en-GB',{weekday:'short'})+' '+hhmm(d);};
+ :d.toLocaleDateString('en-GB',{timeZone:zone(),weekday:'short'})+' '+hhmm(d);};
 const color=t=>(t&&t.area&&t.area.color)||'#64748B';
 const tintHex=c=>`color-mix(in srgb, ${c} 12%, white)`;
 const isParked=(t,now)=>t.snoozeUntil!==undefined&&t.snoozeUntil>(now??Date.now());
@@ -647,11 +674,8 @@ const wDays=t=>Math.floor((Date.now()-(t.waitingSince??t.updatedAt))/DAY);
 const sizeEff={xs:'low',m:'steady',l:'deep'};
 const effOf=t=>sizeEff[t.size]||'steady';
 const normEnergy=e=>({low:'low',light:'low',steady:'steady',deep:'deep'})[e]||'steady';
-const localMinutes=ts=>{const d=new Date(ts);let m=d.getHours()*60+d.getMinutes();
- if(d.getHours()<4)m+=1440;return m;};
-// Helm's day is Europe/London (convex/lib/time.ts) — never the browser's TZ.
-const LDN=new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/London'});
-const londonDay=ts=>LDN.format(new Date(ts));
+const localMinutes=ts=>clockMin(hhmm(new Date(ts)));
+const londonDay=dayAt;
 /* innerHTML only when the content actually changed — a push burst must not
    destroy scroll position, hover state, or a button mid-click. */
 function setHTML(el,html){
@@ -687,8 +711,8 @@ let openDrawer=null,dayOpen=false,dayClosed=null,allFilter='all',delegatingId=nu
 let pairA=null,pairB=null; // merge/connect picker (5.3)
 const linkCache=new Map(); // link siblings not in any live payload (e.g. done) — fetched once
 let energy='steady',energySetAt=0,eveningStartUI=null,lastPickId=null,cardSig='';
-const FOCUS_TOTAL=25*60;let focusLeft=0,focusTimer=null;
-let threadS=8*60,threadE=17*60,threadNow=8*60;
+let FOCUS_TOTAL=0,activeFocusTotal=0,focusLeft=0,focusTimer=null;
+let threadS=0,threadE=1,threadNow=0;
 let panelTimer=null,panelHover=false,drag=null,capTimer=null;
 let sres=[],editRef=null,omniIntent=false;
 const subs=[];
@@ -743,7 +767,7 @@ async function tryBoot(){
   showGate(true,'That URL doesn’t look right — full https://… address, please.');
   return;
  }
- try{await client.query('queries:brief',{apiKey:API_KEY});}
+ try{applySettings(await client.query('settings:get',{apiKey:API_KEY}));await client.query('queries:brief',{apiKey:API_KEY});}
  catch(e){
   try{await client.close();}catch(e2){}client=null;
   const rejected=isAuthErr(e);
@@ -784,6 +808,7 @@ const onErr=e=>{if(isAuthErr(e))regate();};
 function subscribeAll(){
  while(subs.length){try{subs.pop()();}catch(e){}}
  const sub=(name,args,cb)=>subs.push(client.onUpdate(name,{apiKey:API_KEY,...args},cb,onErr));
+ sub('settings:get',{},applySettings);
  // brief hydrates the whole resting page in one subscription (4.4).
  sub('queries:brief',{},b=>{S.brief=b;
   if(Date.now()-energySetAt>5000)energy=normEnergy(b.energy);
@@ -842,10 +867,8 @@ function setAreaColor(c){
 }
 function ringSVG(on){return `<svg class="ring ${on?'on':''}" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M7.5 12.5 10.8 16 16.5 8.5"/></svg>`;}
 function noteActivity(){
- const now=new Date();
- let m=now.getHours()*60+now.getMinutes();
- if(now.getHours()<4)m+=1440;
- if(m>=17*60&&eveningStartUI===null){eveningStartUI=m;tickTime();}
+ const m=localMinutes(Date.now());
+ if(m>=eveningFrom()&&eveningStartUI===null){eveningStartUI=m;tickTime();}
 }
 function toast(msg,ms){const t=$('#toast');t.innerHTML=msg;t.classList.add('show');
  clearTimeout(t._h);t._h=setTimeout(()=>t.classList.remove('show'),ms||2800);
@@ -884,7 +907,7 @@ function startFocus(){
  if(busy||!cur())return;
  if(focusTimer){stopFocus();renderFocusRow();const b=$('#fbar');if(b)b.style.width='0';
   toast('Focus stopped. The world comes back.');return;}
- focusLeft=FOCUS_TOTAL;
+ activeFocusTotal=FOCUS_TOTAL;focusLeft=activeFocusTotal;
  mut('tasks:start',{id:cur()._id}).catch(()=>{}); // first-engagement stamp (H4/D14)
  enterFocusMode();
  const c=$('#card');if(c)c.classList.add('timer-on');
@@ -892,16 +915,16 @@ function startFocus(){
   focusLeft--;
   const btn=$('#focusBtn'),bar=$('#fbar');
   if(btn)btn.innerHTML=`${icons.play} ${mmss(focusLeft)} · stop`;
-  if(bar)bar.style.width=(100*(FOCUS_TOTAL-focusLeft)/FOCUS_TOTAL)+'%';
+  if(bar)bar.style.width=(100*(activeFocusTotal-focusLeft)/activeFocusTotal)+'%';
   if(focusLeft<=0){stopFocus();showTimesUp();}
  },1000);
  renderFocusRow();
- toast('<b>25 on the clock.</b> Everything else can wait — literally.');
+ toast(`<b>${FOCUS_TOTAL/60} on the clock.</b> Focus on this task.`);
 }
 function renderFocusRow(){
  const btn=$('#focusBtn');if(!btn)return;
  if(focusTimer){btn.classList.add('running');btn.innerHTML=`${icons.play} ${mmss(focusLeft)} · stop`;}
- else{btn.classList.remove('running');btn.innerHTML=`${icons.play} Focus 25 min <span class="kbd">F</span>`;}
+ else{btn.classList.remove('running');btn.innerHTML=`${icons.play} Focus ${FOCUS_TOTAL/60} min <span class="kbd">F</span>`;}
 }
 function showTimesUp(){
  const fr=$('#frow');if(!fr)return;
@@ -1012,7 +1035,7 @@ function renderCard(cls){
   ${srcLabel?`<a class="src" ${srcUrl?`href="${esc(srcUrl)}" target="_blank" rel="noopener"`:`href="#" onclick="toast('No link stored for this one.');return false"`}>${icons.link} ${esc(srcLabel)}</a>`:''}
   ${clusterHTML(t)}
   <div class="frow" id="frow">
-   <button class="btn" id="focusBtn" onclick="startFocus()">${icons.play} Focus 25 min <span class="kbd">F</span></button>
+   <button class="btn" id="focusBtn" onclick="startFocus()">${icons.play} Focus ${FOCUS_TOTAL/60} min <span class="kbd">F</span></button>
    <button class="btn" onclick="toggleKickoff()">${icons.spark} Hand to Claude</button>
   </div>
   <div class="kick" id="kick"><div class="kbox">
@@ -1475,7 +1498,7 @@ function toggleSnooze(){
  acts.appendChild(pop);
 }
 function laterTodayTs(){return Date.now()+3*3600000;}
-function tomorrowTs(){const d=new Date();d.setDate(d.getDate()+1);d.setHours(8,0,0,0);return d.getTime();}
+function tomorrowTs(){return wallTime(shiftDay(dayAt(Date.now()),1),workStart());}
 /* Progress note → re-entry context. Local tidy lands instantly; the AI pass
    (ai:polishNote) upgrades it when the key gate is open. Fail = keep local. */
 function localPolish(raw){
@@ -2155,43 +2178,37 @@ async function closeDay(){
 
 /* ═══ clock + day/evening watch ═══ */
 function calcEveningStart(){
- // Real rule (docs/06-surfaces.md): evening watch starts at the first post-17:00
- // completion in the dayLog; UI activity is the fallback before one lands.
+ // Evening watch starts at the first completion after its configured boundary.
+ // UI activity is the fallback before a completion lands.
  const dl=S.dayLog;
  if(dl){
   const times=[...dl.completedPlanned,...dl.completedAdhoc]
    .map(t=>t.doneAt).filter(Boolean).sort((a,b)=>a-b);
-  for(const ts of times){const m=localMinutes(ts);if(m>=17*60)return m;}
+  for(const ts of times){const m=localMinutes(ts);if(m>=eveningFrom())return m;}
  }
  return eveningStartUI;
 }
-let uiDay=new Date().toDateString();
+let uiDay=dayAt(Date.now());
 function tickTime(){
  const now=new Date();
  // Midnight: date-dependent queries (brief/dayLog/newToday) only re-execute on
  // writes, so an always-open tab would show yesterday all night — resubscribe
  // to force fresh runs. maybeMorning re-arms off the new brief.date.
- if(now.toDateString()!==uiDay){
-  uiDay=now.toDateString();
+ if(dayAt(now.getTime())!==uiDay){
+  uiDay=dayAt(now.getTime());eveningStartUI=null;dayClosed=null;
   if(client&&!gateOpen())subscribeAll();
  }
  const [ch,cm]=hhmm(now).split(':');
  $('#clock').innerHTML=`${ch}<span class="colon">:</span>${cm}`;
- const day=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][now.getDay()];
- const h=now.getHours();
- const phase=h<12?'morning':h<17?'afternoon':'evening';
- $('#greet').textContent=`${day} ${phase}. One thing at a time.`;
- const mNow=h*60+now.getMinutes();
+ const day=new Intl.DateTimeFormat('en-GB',{timeZone:zone(),weekday:'long'}).format(now);
+ const mNow=localMinutes(now.getTime()),h=Math.floor(mNow/60);
+ const phase=h<12?'morning':mNow<eveningFrom()?'afternoon':'evening';
+ $('#greet').textContent=`${day} ${phase}.${workingDay(now.getTime())?' One thing at a time.':' Outside your working days.'}`;
  const evStart=calcEveningStart();
- let s,e2,mm=mNow;
- if(mNow>=8*60&&mNow<17*60){s=8*60;e2=17*60;}
- else if(mNow>=17*60||mNow<4*60){
-  if(mNow<4*60)mm=mNow+1440;
-  if(evStart!==null){
-   s=evStart;
-   e2=Math.max(s+120,Math.ceil((mm+90)/30)*30);
-  }else{s=8*60;e2=17*60;mm=e2;}
- }else{s=8*60;e2=17*60;mm=s;}
+ let s=workStart(),e2=workEnd(),mm=mNow;
+ if(mNow>=eveningFrom()&&evStart!==null){s=evStart;e2=Math.max(s+120,Math.ceil((mm+90)/30)*30);}
+ else if(!workingDay(now.getTime())||mNow<s)mm=s;
+ else if(mNow>=e2)mm=e2;
  $('#tStart').textContent=fmtMin(s);
  $('#tEnd').textContent=fmtMin(e2);
  const pct=Math.max(0,Math.min(100,((mm-s)/(e2-s))*100));

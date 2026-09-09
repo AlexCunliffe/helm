@@ -10,9 +10,10 @@ import { Doc, Id } from "./_generated/dataModel";
 import { v } from "convex/values";
 import { statusValidator, originValidator, taskView, meetingDoc } from "./validators";
 import { loadAreaMap, toView, isSnoozed, isClosed, byPriority, TaskView } from "./lib/views";
-import { londonDateString, londonDayRange, DAY_MS } from "./lib/time";
+import { dateString, dayRange, shiftDate, DAY_MS } from "./lib/time";
 import { resolveAreaId } from "./areas";
 import { requireKey } from "./lib/auth";
+import { readSettings, type Settings } from "./lib/settings";
 
 const apiKeyArg = { apiKey: v.optional(v.string()) };
 
@@ -47,7 +48,7 @@ async function byStatus(ctx: QueryCtx, status: Doc<"tasks">["status"]) {
  * wins; otherwise auto-pick: status:today first, then fill from urgent/due/next.
  * Snoozed and closed tasks never appear.
  */
-async function computeToday(ctx: QueryCtx, now: number): Promise<Doc<"tasks">[]> {
+async function computeToday(ctx: QueryCtx, now: number, settings: Settings): Promise<Doc<"tasks">[]> {
   const ordered: Doc<"tasks">[] = [];
   const seen = new Set<Id<"tasks">>();
   const add = (t: Doc<"tasks">) => {
@@ -58,7 +59,7 @@ async function computeToday(ctx: QueryCtx, now: number): Promise<Doc<"tasks">[]>
   };
 
   // 1. Explicit choice for today, if a morning check-in recorded one.
-  const today = londonDateString(now);
+  const today = dateString(now, settings.timezone);
   const checkins = await ctx.db
     .query("checkins")
     .withIndex("by_date", (q) => q.eq("date", today))
@@ -75,12 +76,12 @@ async function computeToday(ctx: QueryCtx, now: number): Promise<Doc<"tasks">[]>
   for (const t of (await byStatus(ctx, "today")).sort(byPriority)) add(t);
 
   // 3. Auto-fill toward the cap from the actionable backlog.
-  if (ordered.length < TODAY_CAP) {
+  if (ordered.length < (settings.caps?.today ?? TODAY_CAP)) {
     const backlog = [...(await byStatus(ctx, "next")), ...(await byStatus(ctx, "inbox"))]
       .filter((t) => !isSnoozed(t, now))
       .sort(byPriority);
     for (const t of backlog) {
-      if (ordered.length >= TODAY_CAP) break;
+      if (ordered.length >= (settings.caps?.today ?? TODAY_CAP)) break;
       add(t);
     }
   }
@@ -94,7 +95,7 @@ async function computeToday(ctx: QueryCtx, now: number): Promise<Doc<"tasks">[]>
  * doesn't count until an evening reconcile blesses it (H5), so a missed
  * evening can't quietly inflate the streak.
  */
-async function computeStreak(ctx: QueryCtx, now: number): Promise<number> {
+async function computeStreak(ctx: QueryCtx, now: number, settings: Settings): Promise<number> {
   const since = now - 60 * DAY_MS;
   const done = (
     await ctx.db
@@ -102,10 +103,10 @@ async function computeStreak(ctx: QueryCtx, now: number): Promise<number> {
       .withIndex("by_done", (q) => q.gte("doneAt", since))
       .collect()
   ).filter((t) => t.status === "done" && !t.provisional);
-  const days = new Set(done.map((t) => londonDateString(t.doneAt!)));
+  const days = new Set(done.map((t) => dateString(t.doneAt!, settings.timezone)));
   let streak = 0;
   for (let i = 0; i <= 60; i++) {
-    const d = londonDateString(now - i * DAY_MS);
+    const d = shiftDate(dateString(now, settings.timezone), -i);
     if (days.has(d)) {
       streak++;
     } else if (i > 0) {
@@ -135,11 +136,12 @@ export const brief = query({
   }),
   handler: async (ctx, { apiKey }) => {
     requireKey(apiKey);
+    const settings = await readSettings(ctx);
     const now = Date.now();
     const areas = await loadAreaMap(ctx);
     const view = (t: Doc<"tasks">) => toView(t, areas);
 
-    const todayDocs = (await computeToday(ctx, now)).slice(0, TODAY_CAP);
+    const todayDocs = (await computeToday(ctx, now, settings)).slice(0, (settings.caps?.today ?? TODAY_CAP));
 
     // waiting on others, oldest first (by_waiting = [status, waitingSince]).
     const waitingDocs = (
@@ -155,21 +157,21 @@ export const brief = query({
       ...(await byStatus(ctx, "today")),
       ...(await byStatus(ctx, "next")),
     ].filter((t) => !isSnoozed(t, now));
-    const wins = actionable.filter((t) => t.size === "xs").sort(byPriority).slice(0, WINS_CAP);
+    const wins = actionable.filter((t) => t.size === "xs").sort(byPriority).slice(0, (settings.caps?.wins ?? WINS_CAP));
 
     // ageing flags: waiting too long, or open + untouched too long.
     const ageingSet = new Map<Id<"tasks">, Doc<"tasks">>();
     for (const t of waitingDocs) {
-      if (now - (t.waitingSince ?? t.updatedAt) > WAITING_AGEING_DAYS * DAY_MS) {
+      if (now - (t.waitingSince ?? t.updatedAt) > (settings.caps?.waitingAgeingDays ?? WAITING_AGEING_DAYS) * DAY_MS) {
         ageingSet.set(t._id, t);
       }
     }
     for (const t of actionable) {
-      if (now - t.updatedAt > OPEN_AGEING_DAYS * DAY_MS) ageingSet.set(t._id, t);
+      if (now - t.updatedAt > (settings.caps?.openAgeingDays ?? OPEN_AGEING_DAYS) * DAY_MS) ageingSet.set(t._id, t);
     }
     const ageing = [...ageingSet.values()]
       .sort((a, b) => (a.waitingSince ?? a.updatedAt) - (b.waitingSince ?? b.updatedAt))
-      .slice(0, AGEING_CAP);
+      .slice(0, (settings.caps?.ageing ?? AGEING_CAP));
 
     // Mirror inbox()'s predicate exactly: a closed task isn't "awaiting confirm",
     // so the badge can't drift above the list.
@@ -202,19 +204,19 @@ export const brief = query({
     const energy = typeof energyRow?.value === "string" ? energyRow.value : "steady";
 
     return {
-      date: londonDateString(now),
+      date: dateString(now, settings.timezone),
       pick: todayDocs.length ? view(todayDocs[0]) : null,
       today: todayDocs.map(view),
       // Capped: the one payload that could become a wall — which is the thing
       // Helm exists to prevent (H6). counts.waiting stays the true total; the
       // full pile is one `waiting` query away.
-      waiting: waitingDocs.slice(0, WAITING_CAP).map(view),
+      waiting: waitingDocs.slice(0, (settings.caps?.waiting ?? WAITING_CAP)).map(view),
       wins: wins.map(view),
       ageing: ageing.map(view),
-      upcoming: upcomingDocs.slice(0, UPCOMING_CAP).map(view),
+      upcoming: upcomingDocs.slice(0, (settings.caps?.upcoming ?? UPCOMING_CAP)).map(view),
       meetings,
       energy,
-      streak: await computeStreak(ctx, now),
+      streak: await computeStreak(ctx, now, settings),
       counts: {
         today: todayDocs.length,
         waiting: waitingDocs.length,
@@ -234,8 +236,9 @@ export const todaysPick = query({
   returns: v.union(taskView, v.null()),
   handler: async (ctx, { apiKey }) => {
     requireKey(apiKey);
+    const settings = await readSettings(ctx);
     const now = Date.now();
-    const todayDocs = await computeToday(ctx, now);
+    const todayDocs = await computeToday(ctx, now, settings);
     if (!todayDocs.length) return null;
     const areas = await loadAreaMap(ctx);
     return toView(todayDocs[0], areas);
@@ -254,9 +257,10 @@ export const dayLog = query({
   }),
   handler: async (ctx, { apiKey, date }) => {
     requireKey(apiKey);
+    const settings = await readSettings(ctx);
     const now = Date.now();
-    const day = date ?? londonDateString(now);
-    const { start, end } = londonDayRange(day);
+    const day = date ?? dateString(now, settings.timezone);
+    const { start, end } = dayRange(day, settings.timezone);
     const areas = await loadAreaMap(ctx);
 
     // Only rows still `status:"done"`: doneAt survives a drop, and without the
@@ -330,14 +334,15 @@ export const newToday = query({
   returns: v.array(taskView),
   handler: async (ctx, { apiKey }) => {
     requireKey(apiKey);
+    const settings = await readSettings(ctx);
     const now = Date.now();
-    const { start, end } = londonDayRange(londonDateString(now));
+    const { start, end } = dayRange(dateString(now, settings.timezone), settings.timezone);
     const areas = await loadAreaMap(ctx);
     const docs = await ctx.db
       .query("tasks")
       .withIndex("by_creation_time", (q) => q.gte("_creationTime", start).lt("_creationTime", end))
       .order("desc")
-      .take(NEW_TODAY_CAP);
+      .take((settings.caps?.newToday ?? NEW_TODAY_CAP));
     return docs.map((t) => toView(t, areas));
   },
 });

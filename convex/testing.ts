@@ -6,8 +6,9 @@
  * harness tags every task fixture with a `test:`-prefixed dedupeKey and pins
  * check-in fixtures to fake past dates; this deletes exactly that footprint.
  */
-import { internalMutation } from "./_generated/server";
+import { internalMutation, internalQuery } from "./_generated/server";
 import { v } from "convex/values";
+import { dayRange } from "./lib/time";
 
 export const purgeTestData = internalMutation({
   args: {
@@ -38,5 +39,16 @@ export const purgeTestData = internalMutation({
       }
     }
     return { tasks: tasks.length, checkins };
+  },
+});
+
+
+/** Read-only calendar probes for the development regression harness. */
+export const calendarRanges = internalQuery({
+  args: { cases: v.array(v.object({ date: v.string(), timezone: v.string() })) },
+  returns: v.array(v.object({ start: v.number(), end: v.number() })),
+  handler: async (_ctx, { cases }) => {
+    if (cases.length > 20) throw new Error("At most 20 calendar cases.");
+    return cases.map(c => dayRange(c.date, c.timezone));
   },
 });

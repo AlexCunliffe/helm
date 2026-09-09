@@ -18,6 +18,7 @@ import { internal } from "./_generated/api";
 import { Doc } from "./_generated/dataModel";
 import { v } from "convex/values";
 import { requireKey } from "./lib/auth";
+import { readSettings } from "./lib/settings";
 import { meetingFields, meetingDoc } from "./validators";
 
 const apiKeyArg = { apiKey: v.optional(v.string()) };
@@ -230,9 +231,11 @@ export const promotePrep = internalMutation({
   returns: v.object({ promoted: v.number() }),
   handler: async (ctx) => {
     const now = Date.now();
+    const settings = await readSettings(ctx);
+    const prepLead = (settings.caps?.meetingPrepLeadMin ?? PREP_LEAD_MS / 60_000) * 60_000;
     const soon = await ctx.db
       .query("meetings")
-      .withIndex("by_start", (q) => q.gte("startAt", now).lt("startAt", now + PREP_LEAD_MS))
+      .withIndex("by_start", (q) => q.gte("startAt", now).lt("startAt", now + prepLead))
       .collect();
     let promoted = 0;
     for (const m of soon) {

@@ -8,9 +8,10 @@ import { mutation, query } from "./_generated/server";
 import { MutationCtx, QueryCtx } from "./_generated/server";
 import { v } from "convex/values";
 import { checkinKindValidator, checkinDoc } from "./validators";
-import { londonDateString, londonDayRange, DAY_MS } from "./lib/time";
+import { dateString, dayRange, shiftDate } from "./lib/time";
 import { isSnoozed } from "./lib/views";
 import { requireKey } from "./lib/auth";
+import { readSettings } from "./lib/settings";
 
 const apiKeyArg = { apiKey: v.optional(v.string()) };
 
@@ -78,8 +79,9 @@ export const chooseToday = mutation({
   returns: v.id("checkins"),
   handler: async (ctx, { apiKey, taskIds, date }) => {
     requireKey(apiKey);
+    const settings = await readSettings(ctx);
     const now = Date.now();
-    const day = date ?? londonDateString(now);
+    const day = date ?? dateString(now, settings.timezone);
     const existing = await findCheckin(ctx, day, "morning");
     const prevChosen = existing?.chosen ?? [];
 
@@ -132,10 +134,10 @@ export const chooseToday = mutation({
 async function reconcileOneDay(
   ctx: MutationCtx,
   day: string,
-  opts: { summary?: string; liveCarried: boolean },
+  opts: { summary?: string; liveCarried: boolean; timezone: string },
 ) {
   const now = Date.now();
-  const { start, end } = londonDayRange(day);
+  const { start, end } = dayRange(day, opts.timezone);
 
   const inDay = await ctx.db
     .query("tasks")
@@ -217,11 +219,13 @@ export const reconcileDay = mutation({
   returns: reconcileReturns,
   handler: async (ctx, { apiKey, date, summary }) => {
     requireKey(apiKey);
+    const settings = await readSettings(ctx);
     const now = Date.now();
-    const day = date ?? londonDateString(now);
+    const day = date ?? dateString(now, settings.timezone);
     const { existed: _existed, ...result } = await reconcileOneDay(ctx, day, {
       summary,
-      liveCarried: true,
+      liveCarried: day === dateString(now, settings.timezone),
+      timezone: settings.timezone,
     });
     return result;
   },
@@ -248,12 +252,13 @@ export const reconcileOutstanding = mutation({
   }),
   handler: async (ctx, { apiKey, lookbackDays, dates, summary }) => {
     requireKey(apiKey);
+    const settings = await readSettings(ctx);
     const now = Date.now();
-    const today = londonDateString(now);
+    const today = dateString(now, settings.timezone);
     const window =
       dates ??
       Array.from({ length: Math.min(lookbackDays ?? 14, 60) }, (_, i) =>
-        londonDateString(now - i * DAY_MS),
+        shiftDate(today, -i),
       ).reverse();
 
     const reconciled: string[] = [];
@@ -264,7 +269,7 @@ export const reconcileOutstanding = mutation({
       if (!existing && !isToday) {
         // Never closed: only backfill days that actually had completions —
         // an empty check-in row for a day off is noise, not honesty.
-        const { start, end } = londonDayRange(day);
+        const { start, end } = dayRange(day, settings.timezone);
         const hadDone = (
           await ctx.db
             .query("tasks")
@@ -276,6 +281,7 @@ export const reconcileOutstanding = mutation({
       const r = await reconcileOneDay(ctx, day, {
         summary: isToday ? summary : undefined,
         liveCarried: isToday,
+        timezone: settings.timezone,
       });
       healed += r.confirmed;
       if (!r.existed) reconciled.push(day);

@@ -1,54 +1,45 @@
-/**
- * Europe/London day math. All Helm times are epoch ms; we format to London at
- * the edges (docs/04). DST-correct via Intl offsets — Helm lives in one
- * timezone, so this is bounded and exact (no date library needed).
- */
-const TZ = "Europe/London";
-
-/** Milliseconds the London wall clock is ahead of UTC at instant `at`. */
-function offsetMs(at: number): number {
-  const dtf = new Intl.DateTimeFormat("en-US", {
-    timeZone: TZ,
-    hourCycle: "h23",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-  });
-  const m: Record<string, string> = {};
-  for (const p of dtf.formatToParts(new Date(at))) {
-    if (p.type !== "literal") m[p.type] = p.value;
-  }
-  const asUTC = Date.UTC(+m.year, +m.month - 1, +m.day, +m.hour, +m.minute, +m.second);
-  return asUTC - at;
-}
-
-/** "YYYY-MM-DD" for the London calendar date containing `at`. */
-export function londonDateString(at: number): string {
-  const d = new Date(at + offsetMs(at));
-  const y = d.getUTCFullYear();
-  const mo = String(d.getUTCMonth() + 1).padStart(2, "0");
-  const da = String(d.getUTCDate()).padStart(2, "0");
-  return `${y}-${mo}-${da}`;
-}
-
-/** Epoch ms of London-local midnight that opens the given "YYYY-MM-DD". */
-export function londonMidnight(date: string): number {
-  const [y, mo, da] = date.split("-").map(Number);
-  const guessUTC = Date.UTC(y, mo - 1, da, 0, 0, 0);
-  return guessUTC - offsetMs(guessUTC);
-}
-
-/** The "YYYY-MM-DD" after the given one (DST-safe via a +26h hop). */
-export function nextDate(date: string): string {
-  return londonDateString(londonMidnight(date) + 26 * 3600 * 1000);
-}
-
-/** Half-open epoch-ms range [start, end) covering one London calendar day. */
-export function londonDayRange(date: string): { start: number; end: number } {
-  return { start: londonMidnight(date), end: londonMidnight(nextDate(date)) };
-}
-
+/** Calendar arithmetic in a caller-supplied IANA timezone. */
+import { ConvexError } from "convex/values";
 export const DAY_MS = 86_400_000;
+const formats = new Map<string, Intl.DateTimeFormat>();
+function formatter(tz: string) {
+  let format = formats.get(tz);
+  if (!format) {
+    format = new Intl.DateTimeFormat("en", { timeZone: tz, calendar: "gregory", numberingSystem: "latn",
+      year: "numeric", month: "2-digit", day: "2-digit" });
+    if (formats.size >= 32) formats.clear();
+    formats.set(tz, format);
+  }
+  return format;
+}
+export function dateString(at: number, tz: string): string {
+  const parts = formatter(tz).formatToParts(at);
+  const part = (name: string) => parts.find(p => p.type === name)!.value;
+  return `${part("year").padStart(4, "0")}-${part("month")}-${part("day")}`;
+}
+function utcDate(date: string): number {
+  const at = Date.parse(date + "T00:00:00.000Z");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !Number.isFinite(at) || new Date(at).toISOString().slice(0, 10) !== date)
+    throw new ConvexError("date: use a valid YYYY-MM-DD calendar date");
+  return at;
+}
+export function shiftDate(date: string, days: number): string {
+  return new Date(utcDate(date) + days * DAY_MS).toISOString().slice(0, 10);
+}
+export function nextDate(date: string): string { return shiftDate(date, 1); }
+
+/** First instant of a calendar day. Handles offset changes at midnight and
+ * skipped dates; a skipped date has an empty dayRange rather than a wrong day. */
+export function midnight(date: string, tz: string): number {
+  const guess = utcDate(date);
+  let lo = guess - 2 * DAY_MS, hi = guess + 2 * DAY_MS;
+  while (lo < hi) {
+    const mid = Math.floor((lo + hi) / 2);
+    if (dateString(mid, tz) < date) lo = mid + 1;
+    else hi = mid;
+  }
+  return lo;
+}
+export function dayRange(date: string, tz: string): { start: number; end: number } {
+  return { start: midnight(date, tz), end: midnight(nextDate(date), tz) };
+}

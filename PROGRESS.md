@@ -83,3 +83,19 @@ Files: time helpers, settings helpers, queries, check-ins, tasks, meetings, AI a
 Checks: multiple timezone boundaries including daylight-saving transitions; non-default caps and workday; changed prompt context; live web updates; full development regression. Live AI assertions require a separately configured API key and remain an explicit gate until that key is available.
 
 Done criteria: consumers follow configuration without a source edit or page reload.
+
+### Slice 2 result
+
+Completed for the available development credentials. TypeScript and all 176 regression checks pass. Calendar tests cover daylight-saving changes, a fractional offset, and a skipped date. Non-default caps and timezone affect the read API. A browser configured to a different timezone rendered the configured clock and workday. A live settings mutation changed the thread geometry without a reload. No browser errors occurred. Live AI checks remain pending the separately configured API key.
+
+The self-review found two escaped prompt references that the original word-boundary scrub missed. They are removed. The external denylist now catches that form. The new import history will be corrected and checked before the next push.
+
+## Stage 3 · Slice 3 plan: MCP and skills
+
+Goal: expose settings through MCP and make all four skills use the configured owner, timezone, tone, and enabled sources.
+
+Files: MCP server, four interactive skills, scheduled skill templates, and contract tests.
+
+Checks: real MCP get/update calls on development; settings restoration; tool-schema contracts; enabled-calendar-only sweep with isolated connector fixtures when an AI key is available.
+
+Done criteria: skills obtain settings first and only inspect enabled sources through their configured servers.

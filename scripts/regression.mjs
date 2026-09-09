@@ -879,7 +879,7 @@ async function main() {
     const configured = await m("settings:update", { patch: {
       owner: { shortName: "Sam" }, timezone: "America/New_York",
       workday: { start: "07:00", end: "17:00", days: [1, 3, 5], eveningWatchFrom: "18:00" },
-      caps: { today: 2, focusMinutes: 30 },
+      caps: { today: 2, waiting: 3, newToday: 2, focusMinutes: 30 },
       sources: [{ key: "gcal", label: "Calendar", kind: "calendar", enabled: true, mcpServer: "calendar" }],
       hook: { logSessions: false, includeCwd: false, titleChars: 100 },
     }});
@@ -889,6 +889,12 @@ async function main() {
     assert(reread.timezone === "America/New_York" && reread.workday.start === "07:00"
       && reread.caps.today === 2 && reread.sources[0].key === "gcal" && reread.hook.titleChars === 100,
       "settings: time, caps, sources and hook round-trip");
+    const customBrief = await q("queries:brief");
+    assert(customBrief.date === new Intl.DateTimeFormat("en-CA", { timeZone: "America/New_York" }).format(Date.now()),
+      "settings consumers: brief date follows the configured timezone");
+    assert(customBrief.today.length <= 2 && customBrief.waiting.length <= 3
+      && (await q("queries:newToday")).length <= 2,
+      "settings consumers: display caps follow overrides");
     for (const patch of [
       { timezone: "Invalid/Timezone" }, { founderContext: "x".repeat(801) },
       { workday: { start: "25:00" } }, { workday: { days: [1, 1] } },
@@ -907,6 +913,23 @@ async function main() {
       workday: { ...settingsBefore.workday, eveningWatchFrom: settingsBefore.workday.eveningWatchFrom ?? null },
     }});
   }
+
+  console.log("\nS · timezone calendar boundaries");
+  const calendarCases = [
+    { date: "2026-03-29", timezone: "Europe/London" },
+    { date: "2026-10-25", timezone: "Europe/London" },
+    { date: "2026-03-08", timezone: "America/New_York" },
+    { date: "2026-11-01", timezone: "America/New_York" },
+    { date: "2026-01-15", timezone: "Asia/Kathmandu" },
+    { date: "2011-12-30", timezone: "Pacific/Apia" },
+  ];
+  const ranges = JSON.parse(execFileSync("npx", ["convex", "run", "testing:calendarRanges", JSON.stringify({ cases: calendarCases })],
+    { cwd: ROOT, encoding: "utf8" }));
+  for (const [i, hours] of [23, 25, 23, 25, 24, 0].entries()) {
+    assert(ranges[i].end - ranges[i].start === hours * 3600_000,
+      `time: ${calendarCases[i].timezone} ${calendarCases[i].date} spans ${hours} hours`);
+  }
+  assert(ranges[4].start === Date.UTC(2026, 0, 14, 18, 15), "time: fractional offset opens on the correct UTC date");
 
   // ── G · janitor proves itself ──
   console.log("\nG · purge");
