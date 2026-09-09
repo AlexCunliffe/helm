@@ -39,6 +39,11 @@ export default defineSchema({
     .index("by_dedupe", ["dedupeKey"])
     .index("by_review", ["needsReview"]),
 
+  // Internal scheduler ownership. No public writer can alter a wake generation.
+  wakeState: defineTable({ key: v.literal("snooze"), generation: v.number(),
+    head: v.array(v.id("tasks")), scheduledJobId: v.optional(v.id("_scheduled_functions")) })
+    .index("by_key", ["key"]),
+
   projects: defineTable(projectFields).index("by_status", ["status"]),
 
   // Accountability log — one morning + one evening row per day.

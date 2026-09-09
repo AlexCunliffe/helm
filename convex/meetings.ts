@@ -23,7 +23,7 @@ import { requireKey } from "./lib/auth";
 import { readSettings } from "./lib/settings";
 import { dateString } from "./lib/time";
 import { prependNow } from "./lib/nowOrder";
-import { boundedRows } from "./lib/bounds";
+import { boundedRows, readTask, accountRead } from "./lib/bounds";
 import { meetingFields, meetingDoc } from "./validators";
 
 const apiKeyArg = { apiKey: v.optional(v.string()) };
@@ -216,15 +216,13 @@ export const promotePrep = internalMutation({
 export async function promoteMeetingPrep(ctx: MutationCtx, now: number) {
     const settings = await readSettings(ctx);
     const prepLead = (settings.caps?.meetingPrepLeadMin ?? PREP_LEAD_MS / 60_000) * 60_000;
-    const soon = await ctx.db
-      .query("meetings")
-      .withIndex("by_start", (q) => q.gte("startAt", now).lt("startAt", now + prepLead))
-      .collect();
+    const soon = await boundedRows(ctx, ctx.db.query("meetings")
+      .withIndex("by_start", q => q.gte("startAt", now).lt("startAt", now + prepLead)), "Upcoming prep meetings");
     let promoted = 0;
     const promotedIds: Id<"tasks">[] = [];
     for (const m of soon) {
       if (!m.prepTaskId || m.prepPromotedAt !== undefined) continue;
-      const task: Doc<"tasks"> | null = await ctx.db.get(m.prepTaskId);
+      const task: Doc<"tasks"> | null = await readTask(ctx, m.prepTaskId);
       if (task && task.status !== "done" && task.status !== "dropped") {
         await ctx.db.patch(task._id, {
           status: "today",
@@ -240,8 +238,8 @@ export async function promoteMeetingPrep(ctx: MutationCtx, now: number) {
     }
     if (promotedIds.length) {
       const date = dateString(now, settings.timezone);
-      const morning = await ctx.db.query("checkins")
-        .withIndex("by_date_kind", q => q.eq("date", date).eq("kind", "morning")).unique();
+      const morning = accountRead(ctx, await ctx.db.query("checkins")
+        .withIndex("by_date_kind", q => q.eq("date", date).eq("kind", "morning")).unique());
       const chosen = new Set(morning?.chosen ?? []);
       const newlyPromoted = new Set(promotedIds);
       const prepOrder: Id<"tasks">[] = [];
@@ -251,7 +249,7 @@ export async function promoteMeetingPrep(ctx: MutationCtx, now: number) {
         if (!meeting.prepTaskId) continue;
         if (newlyPromoted.has(meeting.prepTaskId)) prepOrder.push(meeting.prepTaskId);
         else if (meeting.prepPromotedAt !== undefined && chosen.has(meeting.prepTaskId)) {
-          const task = await ctx.db.get(meeting.prepTaskId);
+          const task = await readTask(ctx, meeting.prepTaskId);
           if (task?.status === "today" && (task.snoozeUntil === undefined || task.snoozeUntil <= now))
             prepOrder.push(task._id);
         }

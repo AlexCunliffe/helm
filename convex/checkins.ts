@@ -14,6 +14,8 @@ import { isSnoozed } from "./lib/views";
 import { requireKey } from "./lib/auth";
 import { readSettings } from "./lib/settings";
 
+import { accountRead, boundedRows, readTask, arrayCapacity, positiveLimit, requirePayload } from "./lib/bounds";
+
 const apiKeyArg = { apiKey: v.optional(v.string()) };
 const fixtureArg = { fixtureRunId: v.optional(v.string()) };
 
@@ -32,8 +34,15 @@ async function findCheckin(
   date: string,
   kind: "morning" | "evening",
 ) {
-  return await ctx.db.query("checkins")
-    .withIndex("by_date_kind", q => q.eq("date", date).eq("kind", kind)).unique();
+  return accountRead(ctx, await ctx.db.query("checkins")
+    .withIndex("by_date_kind", q => q.eq("date", date).eq("kind", kind)).unique());
+}
+
+function checkinCapacity(row: { chosen: unknown[]; completedPlanned: unknown[]; completedAdhoc: unknown[]; carried: unknown[]; summary?: string }) {
+  arrayCapacity(row.chosen, "Chosen order", 200);
+  for (const name of ["completedPlanned", "completedAdhoc", "carried"] as const) arrayCapacity(row[name], name, 1000);
+  if ((row.summary?.length ?? 0) > 10_000) throw new ConvexError("Check-in summary supports at most 10000 characters.");
+  requirePayload(row, "Check-in", 256 * 1024);
 }
 
 export const getCheckin = query({
@@ -74,6 +83,7 @@ export const upsertCheckin = mutation({
       carried: args.carried ?? existing?.carried ?? [],
       summary: args.summary ?? existing?.summary,
     };
+    checkinCapacity(row);
     if (existing) {
       await ctx.db.patch(existing._id, row);
       return existing._id;
@@ -98,13 +108,15 @@ export const chooseToday = mutation({
     dayRange(day, settings.timezone);
     const existing = await findCheckin(ctx, day, "morning");
     requireFixtureOwnership(existing, fixtureRunId);
+    arrayCapacity(taskIds, "Chosen order", 200);
     const prevChosen = existing?.chosen ?? [];
+    arrayCapacity(prevChosen, "Previous chosen order", 1000);
 
     // Promote the picks we can actually action; record ONLY those (a closed task
     // can't be "chosen for today", so it mustn't appear in `chosen`).
     const promoted: typeof taskIds = [];
-    for (const id of taskIds) {
-      const t = await ctx.db.get(id);
+    for (const id of new Set(taskIds)) {
+      const t = await readTask(ctx, id);
       if (t && t.status !== "done" && t.status !== "dropped") {
         if (t.status !== "today") await ctx.db.patch(id, { status: "today", waitingSince: undefined, updatedAt: now });
         promoted.push(id);
@@ -115,11 +127,12 @@ export const chooseToday = mutation({
     const keep = new Set(taskIds);
     for (const id of prevChosen) {
       if (keep.has(id)) continue;
-      const t = await ctx.db.get(id);
+      const t = await readTask(ctx, id);
       if (t && t.status === "today") await ctx.db.patch(id, { status: "next", updatedAt: now });
     }
 
     if (existing) {
+      checkinCapacity({ ...existing, chosen: promoted });
       await ctx.db.patch(existing._id, { chosen: promoted, fixtureRunId });
       return existing._id;
     }
@@ -156,11 +169,8 @@ async function reconcileOneDay(
   const existing = await findCheckin(ctx, day, "evening");
   requireFixtureOwnership(existing, opts.fixtureRunId);
 
-  const inDay = await ctx.db
-    .query("tasks")
-    .withIndex("by_done", (q) => q.gte("doneAt", start).lt("doneAt", end))
-    .collect();
-  const done = inDay.filter((t) => t.status === "done");
+  const done = await boundedRows(ctx, ctx.db.query("tasks")
+    .withIndex("by_status_done", q => q.eq("status", "done").gte("doneAt", start).lt("doneAt", end)), "Daily completions");
   if (opts.fixtureRunId && done.some(t => !t.dedupeKey?.startsWith(opts.fixtureRunId!)))
     throw new ConvexError("Refuse to reconcile completions outside this fixture run.");
 
@@ -180,10 +190,8 @@ async function reconcileOneDay(
   // (no-guilt close — docs/01).
   const carried = opts.liveCarried
     ? (
-        await ctx.db
-          .query("tasks")
-          .withIndex("by_status", (q) => q.eq("status", "today"))
-          .collect()
+        await boundedRows(ctx, ctx.db.query("tasks")
+          .withIndex("by_status", q => q.eq("status", "today")), "Today partition")
       )
         .filter((t) => !isSnoozed(t, now))
         .map((t) => t._id)
@@ -198,6 +206,7 @@ async function reconcileOneDay(
     carried,
     summary: opts.summary ?? existing?.summary,
   };
+  checkinCapacity(row);
   let checkinId;
   if (existing) {
     await ctx.db.patch(existing._id, row);
@@ -272,11 +281,10 @@ export const reconcileOutstanding = mutation({
     const settings = await readSettings(ctx);
     const now = Date.now();
     const today = dateString(now, settings.timezone);
-    const window =
-      dates ??
-      Array.from({ length: Math.min(lookbackDays ?? 14, 60) }, (_, i) =>
-        shiftDate(today, -i),
-      ).reverse();
+    if (dates) arrayCapacity(dates, "Reconciliation dates", 60);
+    const lookback = positiveLimit(lookbackDays, 14, 60);
+    const window = [...new Set(dates ?? Array.from({ length: lookback }, (_, i) => shiftDate(today, -i)).reverse())];
+    for (const day of window) dayRange(day, settings.timezone);
 
     const reconciled: string[] = [];
     let healed = 0;
@@ -287,12 +295,8 @@ export const reconcileOutstanding = mutation({
         // Never closed: only backfill days that actually had completions —
         // an empty check-in row for a day off is noise, not honesty.
         const { start, end } = dayRange(day, settings.timezone);
-        const hadDone = (
-          await ctx.db
-            .query("tasks")
-            .withIndex("by_done", (q) => q.gte("doneAt", start).lt("doneAt", end))
-            .collect()
-        ).some((t) => t.status === "done");
+        const hadDone = accountRead(ctx, await ctx.db.query("tasks")
+          .withIndex("by_status_done", q => q.eq("status", "done").gte("doneAt", start).lt("doneAt", end)).first());
         if (!hadDone) continue;
       }
       const r = await reconcileOneDay(ctx, day, {

@@ -964,6 +964,19 @@ async function main() {
   }
   assert(ranges[4].start === Date.UTC(2026, 0, 14, 18, 15), "time: fractional offset opens on the correct UTC date");
 
+  console.log("\nV · bounded write and background contracts");
+  await throws(() => m("checkins:chooseToday", { date: SAFE_DATE, fixtureRunId: PREFIX, taskIds: Array(201).fill(d2.taskId) }), "capacity: excessive choices rejected");
+  await throws(() => m("tasks:delegate", { taskIds: Array(101).fill(d2.taskId) }), "capacity: excessive delegation rejected");
+  await throws(() => m("checkins:upsertCheckin", { date: SAFE_DATE, kind: "morning", fixtureRunId: PREFIX, chosen: Array(201).fill(d2.taskId) }), "capacity: oversized chosen document rejected");
+  await throws(() => m("checkins:upsertCheckin", { date: SAFE_DATE, kind: "evening", fixtureRunId: PREFIX, carried: Array(1001).fill(d2.taskId) }), "capacity: oversized carried document rejected");
+  await throws(() => m("checkins:upsertCheckin", { date: SAFE_DATE, kind: "evening", fixtureRunId: PREFIX, summary: "x".repeat(10001) }), "capacity: oversized summary rejected");
+  await throws(() => m("checkins:reconcileOutstanding", { dates: Array(61).fill(SAFE_DATE), fixtureRunId: PREFIX }), "capacity: excessive explicit dates rejected");
+  for (const lookbackDays of [0, 1.5, 61]) await throws(() => m("checkins:reconcileOutstanding", { lookbackDays, fixtureRunId: PREFIX }), "capacity: invalid lookback rejected");
+  let wakeProbe = false;
+  try { execFileSync("npx", ["--no-install", "convex", "run", "testing:wakeBatchProbe", "{}"], { cwd: ROOT, encoding: "utf8" }); }
+  catch (error) { wakeProbe = String(error.stderr ?? "").includes("WAKE_PROBE_PASSED_ROLLED_BACK:"); }
+  assert(wakeProbe, "waker: batched progress, ownership, recovery, current order, byte limits, and legacy fallback roll back safely");
+
   console.log("\nU · bounded query and history contracts");
   const pageArea = "test-page-" + randomUUID().slice(0, 8);
   await m("areas:upsertArea", { key: pageArea, label: "TEST history", color: "#345678", order: 9999, createOnly: true });

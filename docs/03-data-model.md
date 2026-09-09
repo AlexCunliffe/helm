@@ -52,3 +52,7 @@ Other metadata includes source watermarks (`sweep:<source>:lastAt`) and legacy i
 `planned` is a forward intention. `adhoc` is work captured after it happened. Both appear in the daily completion record. This makes the daily account include the work that displaced the original plan.
 
 Task reads also use additive `by_status_area`, `by_status_done`, and `by_status_provisional_done` indexes for filtered history, daily completions, and streak existence checks. Existing indexes remain available.
+
+### Internal wake scheduling
+
+`wakeState` is an internal singleton indexed by `key` (`snooze`). It stores a monotonically increasing generation, a bounded head of task IDs, and an optional scheduled-function ID. The cron joins an active continuation, or resumes a failed/cancelled job with a new generation. No public function writes this table.

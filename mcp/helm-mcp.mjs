@@ -195,7 +195,7 @@ forward(
     "today-task to do the delegating (kickoffPrompt drafts the handover). Follow-up comes free from " +
     "the waiting/ageing machinery.",
   {
-    taskIds: z.array(z.string()),
+    taskIds: z.array(z.string()).max(100),
     person: z.string().optional(),
     note: z.string().optional(),
   },
@@ -302,7 +302,7 @@ forward(
 forward(
   "chooseToday",
   "Commit today's configured selection: record the chosen task ids and move them to status 'today' so every surface leads with them.",
-  { taskIds: z.array(z.string()), date: z.string().optional() },
+  { taskIds: z.array(z.string()).max(200), date: z.string().optional() },
   "mutation",
   "checkins:chooseToday",
 );
@@ -320,8 +320,8 @@ forward(
     "surviving provisional completions so they count toward the streak. Prefer this over reconcileDay " +
     "for the evening routine. Returns {reconciled:[dates backfilled], healed:n}.",
   {
-    lookbackDays: z.number().optional(),
-    dates: z.array(z.string()).optional(),
+    lookbackDays: z.number().int().min(1).max(60).optional(),
+    dates: z.array(z.string()).max(60).optional(),
     summary: z.string().optional(),
   },
   "mutation",

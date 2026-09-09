@@ -6,6 +6,8 @@
  * namespace. Check-ins require exact snapshots of rows created by that run;
  * date-wide deletion is deliberately refused.
  */
+import type { Id } from "./_generated/dataModel";
+import { wakeDueBatch } from "./tasks";
 import { internalMutation, internalQuery, internalAction } from "./_generated/server";
 import { v, ConvexError } from "convex/values";
 import { seedAreaRows } from "./areas";
@@ -42,12 +44,8 @@ export const purgeTestData = internalMutation({
     }
     // Range scan on by_dedupe covers every key with the prefix. Tasks without a
     // dedupeKey sort before all strings in the index, so they're never touched.
-    const tasks = await ctx.db
-      .query("tasks")
-      .withIndex("by_dedupe", (q) =>
-        q.gte("dedupeKey", prefix).lt("dedupeKey", prefix + "\uffff"),
-      )
-      .collect();
+    const tasks = await boundedRows(ctx, ctx.db.query("tasks")
+      .withIndex("by_dedupe", q => q.gte("dedupeKey", prefix).lt("dedupeKey", prefix + "\uffff")), "Fixture namespace");
     for (const t of tasks) await ctx.db.delete(t._id);
 
     for (const id of owned) await ctx.db.delete(id);
@@ -204,5 +202,75 @@ export const readCapacityProbe = internalMutation({
     catch (error) { rejected = error instanceof ConvexError && String(error.data).includes("4 MiB"); }
     if (!rejected || consumed > 5) throw new ConvexError("READ_CAPACITY_PROBE_FAILED: byte guard");
     throw new ConvexError("READ_CAPACITY_PROBE_PASSED_ROLLED_BACK");
+  },
+});
+
+/** Run real batching/scheduling helpers, then roll back fixtures and queued jobs. */
+export const wakeBatchProbe = internalMutation({
+  args: {}, returns: v.null(),
+  handler: async (ctx) => {
+    let checks = 0;
+    const check = (condition: unknown, label: string) => { if (!condition) throw new ConvexError("WAKE_PROBE_FAILED: " + label); checks++; };
+    const area = await ctx.db.query("areas").withIndex("by_key").first();
+    if (!area) throw new ConvexError("Seed an area before the wake probe.");
+    const stateBefore = await ctx.db.query("wakeState").withIndex("by_key", q => q.eq("key", "snooze")).unique();
+    if (stateBefore) await ctx.db.delete(stateBefore._id); // restored by rollback
+    const settings = await readSettings(ctx), date = dateString(2, settings.timezone);
+    const morningBefore = await ctx.db.query("checkins").withIndex("by_date_kind", q => q.eq("date", date).eq("kind", "morning")).unique();
+    if (morningBefore) await ctx.db.delete(morningBefore._id);
+    const morning = () => ctx.db.query("checkins").withIndex("by_date_kind", q => q.eq("date", date).eq("kind", "morning")).unique();
+    const state = () => ctx.db.query("wakeState").withIndex("by_key", q => q.eq("key", "snooze")).unique();
+    // Each helper call represents a fresh transaction's capacity, inside this rollback boundary.
+    const run = (generation?: number) => wakeDueBatch({ ...ctx }, 2, generation);
+    const ids: Id<"tasks">[] = [];
+    for (let i = 0; i < 205; i++) ids.push(await ctx.db.insert("tasks", {
+      title: "TEST wake batch " + i, areaId: area._id, status: "inbox", waitingSince: 1,
+      origin: "planned", source: "test", snoozeUntil: 1, updatedAt: 1,
+      dedupeKey: "test:wake-probe:" + i,
+    }));
+    const first = await run(), firstState = (await state())!;
+    check(first.woken === 100 && first.promoted === 100, "first bounded batch");
+    const job = await ctx.db.system.get(firstState.scheduledJobId!);
+    check(job?.state.kind === "pending", "continuation scheduled atomically");
+    check((await run()).woken === 0, "overlapping cron skips active job");
+    check((await run(firstState.generation - 1)).woken === 0, "stale generation rejected");
+    const firstMorning = (await morning())!;
+    const reordered = [...firstMorning.chosen].reverse().slice(1);
+    await ctx.db.patch(firstMorning._id, { chosen: reordered });
+    const second = await run(firstState.generation), secondMorning = (await morning())!;
+    check(second.woken === 100 && second.promoted === 100, "second batch advances");
+    check(reordered.every((id, i) => secondMorning.chosen[i] === id), "current ordering preserved");
+    check(!secondMorning.chosen.includes(firstMorning.chosen[99]), "deliberate removal preserved");
+    await ctx.scheduler.cancel((await state())!.scheduledJobId!);
+    const third = await run(), thirdState = (await state())!;
+    check(third.woken === 5 && third.promoted === 5, "cron recovers cancelled continuation");
+    check(thirdState.generation > firstState.generation, "recovery invalidates old generation");
+    check((await morning())!.chosen.length === 200, "maintained head bounded");
+    for (const id of ids) {
+      const task = (await ctx.db.get(id))!;
+      check(task.status === "today" && task.snoozeUntil === undefined && task.waitingSince === undefined, "all backlog tasks progress");
+    }
+    check((await run(thirdState.generation)).woken === 0 && !(await state())!.scheduledJobId, "empty continuation releases ownership");
+    check((await run(thirdState.generation)).woken === 0, "inactive generation rejected");
+    // Escaped text must use Convex storage size, not its much larger JSON encoding.
+    // The legacy check-in stays byte-for-byte intact while both large batches progress.
+    const largeMorning = (await morning())!;
+    await ctx.db.patch(largeMorning._id, { summary: "\0".repeat(800000) });
+    const beforeLarge = JSON.stringify(await morning());
+    const largeA = await ctx.db.insert("tasks", { title: "TEST large wake", note: "\0".repeat(800000), areaId: area._id,
+      status: "inbox", origin: "planned", source: "test", snoozeUntil: 1, updatedAt: 1, dedupeKey: "test:wake-probe:large-a" });
+    const largeB = await ctx.db.insert("tasks", { title: "TEST large chase", note: "\0".repeat(800000), areaId: area._id,
+      status: "waiting", waitingSince: 1, origin: "planned", source: "test", snoozeUntil: 1, updatedAt: 1, dedupeKey: "test:wake-probe:large-b" });
+    const largeFirst = await run(), largeState = (await state())!;
+    check(largeFirst.woken === 1 && largeFirst.promoted === 1, "byte target ends first large batch");
+    check(JSON.stringify(await morning()) === beforeLarge, "oversized legacy check-in untouched");
+    const largeSecond = await run(largeState.generation);
+    check(largeSecond.woken === 1 && largeSecond.promoted === 0, "second large batch advances");
+    const chase = (await ctx.db.get(largeB))!;
+    check(chase.status === "waiting" && chase.waitingSince === 1 && chase.snoozeUntil === undefined, "waiting clock survives");
+    check((await ctx.db.get(largeA))!.status === "today", "legacy fallback still promotes task");
+    check(JSON.stringify(await morning()) === beforeLarge, "legacy fallback stays unchanged across batches");
+    check((await state())!.generation > thirdState.generation, "new idle generation never reuses token");
+    throw new ConvexError("WAKE_PROBE_PASSED_ROLLED_BACK:" + checks);
   },
 });

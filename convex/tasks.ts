@@ -24,7 +24,9 @@ import { isClosed } from "./lib/views";
 import { requireKey } from "./lib/auth";
 import { dateString } from "./lib/time";
 import { readSettings } from "./lib/settings";
-import { removeFromNow } from "./lib/nowOrder";
+import { internal } from "./_generated/api";
+import { accountRead, boundedRows, boundedBatch, readTask, arrayCapacity, requirePayload } from "./lib/bounds";
+import { removeFromNow, prependNow, NOW_ORDER_LIMIT } from "./lib/nowOrder";
 
 // Every public function takes this and calls requireKey first (4.1, D15).
 const apiKeyArg = { apiKey: v.optional(v.string()) };
@@ -35,7 +37,7 @@ export const get = query({
   returns: v.union(taskDoc, v.null()),
   handler: async (ctx, { apiKey, id }) => {
     requireKey(apiKey);
-    return await ctx.db.get(id);
+    return await readTask(ctx, id);
   },
 });
 
@@ -54,7 +56,7 @@ async function applyStatus(
   status: Doc<"tasks">["status"], // derived from the schema — one source of truth
   now: number,
 ): Promise<void> {
-  const task = await ctx.db.get(id);
+  const task = await readTask(ctx, id);
   if (!task) throw new ConvexError(`Task ${id} not found.`);
   const patch: Record<string, unknown> = { status, updatedAt: now };
   if (status === "done") {
@@ -99,17 +101,15 @@ async function applyStatus(
  * target is provenance, not a lookup path (arrays aren't indexable).
  */
 async function dedupeMatches(ctx: MutationCtx, dedupeKey: string) {
-  const rows = await ctx.db
-    .query("tasks")
-    .withIndex("by_dedupe", (q) => q.eq("dedupeKey", dedupeKey))
-    .collect();
+  const rows = await boundedRows(ctx, ctx.db.query("tasks")
+    .withIndex("by_dedupe", q => q.eq("dedupeKey", dedupeKey)), "Dedupe history");
   const matches: Doc<"tasks">[] = [];
   const seen = new Set<Id<"tasks">>();
   for (const row of rows) {
     let cur = row;
     const visited = new Set<Id<"tasks">>([cur._id]);
     while (cur.mergedInto) {
-      const next = await ctx.db.get(cur.mergedInto);
+      const next = await readTask(ctx, cur.mergedInto);
       if (!next || visited.has(next._id)) break; // dangling pointer / cycle guard
       visited.add(next._id);
       cur = next;
@@ -307,7 +307,7 @@ export const snooze = mutation({
   returns: v.null(),
   handler: async (ctx, { apiKey, id, until }) => {
     requireKey(apiKey);
-    const task = await ctx.db.get(id);
+    const task = await readTask(ctx, id);
     if (!task) throw new ConvexError(`Task ${id} not found.`);
     await ctx.db.patch(id, { snoozeUntil: until, updatedAt: Date.now() });
     return null;
@@ -325,7 +325,7 @@ export const start = mutation({
   returns: v.null(),
   handler: async (ctx, { apiKey, id }) => {
     requireKey(apiKey);
-    const task = await ctx.db.get(id);
+    const task = await readTask(ctx, id);
     if (!task) throw new ConvexError(`Task ${id} not found.`);
     if (task.startedAt === undefined) {
       await ctx.db.patch(id, { startedAt: Date.now(), updatedAt: Date.now() });
@@ -345,57 +345,50 @@ export const start = mutation({
  * gte(1) lower bound keeps the index range clear of the undefined partition.
  */
 export const wakeExpired = internalMutation({
-  args: {},
+  args: { generation: v.optional(v.number()) },
   returns: v.object({ woken: v.number(), promoted: v.number() }),
-  handler: async (ctx) => {
-    const now = Date.now();
-    const due = await ctx.db
-      .query("tasks")
-      .withIndex("by_snooze", (q) => q.gte("snoozeUntil", 1).lte("snoozeUntil", now))
-      .collect();
-
-    const promoted: Id<"tasks">[] = [];
-    for (const t of due) {
-      const patch: Record<string, unknown> = {
-        snoozeUntil: undefined,
-        wokeAt: now,
-        updatedAt: now,
-      };
-      if (!isClosed(t) && t.status !== "waiting") {
-        patch.status = "today";
-        promoted.push(t._id);
-      }
-      await ctx.db.patch(t._id, patch);
-    }
-
-    // Head of the Now order: prepend to today's morning-checkin `chosen`
-    // (computeToday reads it first). Created machine-authored if absent —
-    // chosen IS the Now order, however it came to be.
-    if (promoted.length) {
-      const settings = await readSettings(ctx);
-      const today = dateString(now, settings.timezone);
-      const checkins = await ctx.db
-        .query("checkins")
-        .withIndex("by_date", (q) => q.eq("date", today))
-        .collect();
-      const morning = checkins.find((c) => c.kind === "morning");
-      if (morning) {
-        const rest = morning.chosen.filter((id) => !promoted.includes(id));
-        await ctx.db.patch(morning._id, { chosen: [...promoted, ...rest] });
-      } else {
-        await ctx.db.insert("checkins", {
-          date: today,
-          kind: "morning",
-          chosen: promoted,
-          completedPlanned: [],
-          completedAdhoc: [],
-          carried: [],
-        });
-      }
-    }
-    return { woken: due.length, promoted: promoted.length };
-  },
+  handler: async (ctx, { generation }): Promise<{ woken: number; promoted: number }> =>
+    wakeDueBatch(ctx, Date.now(), generation),
 });
+
+/** One transaction owns each generation; the minute cron recovers failed jobs. */
+export async function wakeDueBatch(ctx: MutationCtx, now: number, generation?: number): Promise<{ woken: number; promoted: number }> {
+  const state = accountRead(ctx, await ctx.db.query("wakeState")
+    .withIndex("by_key", q => q.eq("key", "snooze")).unique());
+  const empty = { woken: 0, promoted: 0 };
+  if (generation !== undefined && (!state?.scheduledJobId || generation !== state.generation)) return empty;
+  if (generation === undefined && state?.scheduledJobId) {
+    const job = await ctx.db.system.get(state.scheduledJobId);
+    if (job?.state.kind === "pending" || job?.state.kind === "inProgress") return empty;
+  }
+  const due = await boundedBatch(ctx, ctx.db.query("tasks")
+    .withIndex("by_snooze", q => q.gte("snoozeUntil", 1).lte("snoozeUntil", now)));
+  if (!due.length) {
+    if (state?.scheduledJobId) await ctx.db.patch(state._id, { head: [], scheduledJobId: undefined });
+    return empty;
+  }
+  const promoted: Id<"tasks">[] = [];
+  for (const t of due) {
+    const patch: Record<string, unknown> = { snoozeUntil: undefined, wokeAt: now, updatedAt: now };
+    if (!isClosed(t) && t.status !== "waiting") {
+      patch.status = "today"; patch.waitingSince = undefined; promoted.push(t._id);
+    }
+    await ctx.db.patch(t._id, patch);
+  }
+  const settings = await readSettings(ctx), date = dateString(now, settings.timezone);
+  const morning = accountRead(ctx, await ctx.db.query("checkins")
+    .withIndex("by_date_kind", q => q.eq("date", date).eq("kind", "morning")).unique());
+  const previous = new Set(state?.head ?? []);
+  // Respect current order, including deliberate removals/reordering between batches.
+  const retained = (morning?.chosen ?? []).filter(id => previous.has(id));
+  const head = [...new Set([...retained, ...promoted])].slice(0, NOW_ORDER_LIMIT);
+  if (promoted.length) await prependNow(ctx, date, head);
+  const nextGeneration = generation ?? (state?.generation ?? 0) + 1;
+  const scheduledJobId = await ctx.scheduler.runAfter(0, internal.tasks.wakeExpired, { generation: nextGeneration });
+  const value = { key: "snooze" as const, generation: nextGeneration, head, scheduledJobId };
+  if (state) await ctx.db.patch(state._id, value); else await ctx.db.insert("wakeState", value);
+  return { woken: due.length, promoted: promoted.length };
+}
 
 /** Un-snooze: clear the wake time so the task returns to its surfaces now. */
 export const wake = mutation({
@@ -403,7 +396,7 @@ export const wake = mutation({
   returns: v.null(),
   handler: async (ctx, { apiKey, id }) => {
     requireKey(apiKey);
-    const task = await ctx.db.get(id);
+    const task = await readTask(ctx, id);
     if (!task) throw new ConvexError(`Task ${id} not found.`);
     // Convex db.patch removes fields set to undefined.
     await ctx.db.patch(id, { snoozeUntil: undefined, updatedAt: Date.now() });
@@ -456,7 +449,7 @@ export const update = mutation({
     requireKey(args.apiKey);
     // apiKey is auth, not data — it must never land in the patch below.
     const { apiKey: _apiKey, id, areaKey, ...rest } = args;
-    const task = await ctx.db.get(id);
+    const task = await readTask(ctx, id);
     if (!task) throw new ConvexError(`Task ${id} not found.`);
     const patch: Record<string, unknown> = { updatedAt: Date.now() };
     for (const [k, val] of Object.entries(rest)) {
@@ -491,10 +484,11 @@ export const delegate = mutation({
     const now = Date.now();
     const settings = await readSettings(ctx);
     const who = person ?? "someone";
+    arrayCapacity(taskIds, "Delegation", 100);
 
     const handedOver: Doc<"tasks">[] = [];
-    for (const id of taskIds) {
-      const task = await ctx.db.get(id);
+    for (const id of new Set(taskIds)) {
+      const task = await readTask(ctx, id);
       if (!task || isClosed(task)) continue;
       await applyStatus(ctx, id, "waiting", now); // stamps waitingSince
       await ctx.db.patch(id, { waitingOn: who });
@@ -509,7 +503,7 @@ export const delegate = mutation({
       titles.length === 1
         ? titles[0]
         : `${titles[0]} (+${titles.length - 1} more)`;
-    const delegationTaskId = await ctx.db.insert("tasks", {
+    const delegationRow = {
       title: `Delegate: ${summary} → ${who}`,
       note:
         `Hand over to ${who}:\n${titles.map((t) => `• ${t}`).join("\n")}` +
@@ -525,7 +519,9 @@ export const delegate = mutation({
         `Include what "done" looks like for each and when it is needed. Tone: ${settings.owner.tone}.`,
       dedupeKey,
       updatedAt: now,
-    });
+    } as const;
+    requirePayload(delegationRow, "Delegation task");
+    const delegationTaskId = await ctx.db.insert("tasks", delegationRow);
     return { delegationTaskId, delegated: handedOver.length };
   },
 });
@@ -552,8 +548,8 @@ export const merge = mutation({
   handler: async (ctx, { apiKey, sourceId, targetId }) => {
     requireKey(apiKey);
     if (sourceId === targetId) throw new ConvexError("merge: a task can't merge into itself.");
-    const source = await ctx.db.get(sourceId);
-    const target = await ctx.db.get(targetId);
+    const source = await readTask(ctx, sourceId);
+    const target = await readTask(ctx, targetId);
     if (!source) throw new ConvexError(`Task ${sourceId} not found.`);
     if (!target) throw new ConvexError(`Task ${targetId} not found.`);
     // Closed rows are out of play: merging INTO one would bury live work, and a
@@ -597,15 +593,21 @@ export const merge = mutation({
 
     // Migrate links, keeping adjacency symmetric: every neighbour that pointed
     // at the source now points at the target; a source↔target edge dissolves.
+    arrayCapacity(source.links ?? [], "Source links", 200);
+    arrayCapacity(target.links ?? [], "Target links", 200);
+    arrayCapacity(patch.mergedFrom as unknown[], "Merge provenance", 200);
+    arrayCapacity([...aliases], "Dedupe aliases", 200);
     const targetLinks = new Set(target.links ?? []);
     targetLinks.delete(sourceId);
     for (const nId of source.links ?? []) {
       if (nId === targetId) continue;
-      const n = await ctx.db.get(nId);
+      const n = await readTask(ctx, nId);
       if (!n) continue;
       const nLinks = new Set(n.links ?? []);
       nLinks.delete(sourceId);
       nLinks.add(targetId);
+      arrayCapacity([...nLinks], "Neighbour links", 200);
+      requirePayload({ ...n, links: [...nLinks] }, "Linked task");
       await ctx.db.patch(nId, { links: [...nLinks], updatedAt: now });
       targetLinks.add(nId);
     }
@@ -616,6 +618,8 @@ export const merge = mutation({
     // one-tap confirm but the source was already accepted, the merge IS the confirm.
     if (target.needsReview && !source.needsReview) patch.needsReview = false;
 
+    arrayCapacity([...targetLinks], "Merged links", 200);
+    requirePayload({ ...target, ...patch }, "Merged task");
     await ctx.db.patch(targetId, patch);
 
     // Drop the source — traceable, not lost. applyStatus keeps the flag
@@ -639,16 +643,20 @@ export const connect = mutation({
   handler: async (ctx, { apiKey, aId, bId }) => {
     requireKey(apiKey);
     if (aId === bId) throw new ConvexError("connect: a task can't link to itself.");
-    const a = await ctx.db.get(aId);
-    const b = await ctx.db.get(bId);
+    const a = await readTask(ctx, aId);
+    const b = await readTask(ctx, bId);
     if (!a) throw new ConvexError(`Task ${aId} not found.`);
     if (!b) throw new ConvexError(`Task ${bId} not found.`);
     const now = Date.now();
     if (!(a.links ?? []).includes(bId)) {
-      await ctx.db.patch(aId, { links: [...(a.links ?? []), bId], updatedAt: now });
+      const links = [...(a.links ?? []), bId];
+      arrayCapacity(links, "Task links", 200); requirePayload({ ...a, links }, "Linked task");
+      await ctx.db.patch(aId, { links, updatedAt: now });
     }
     if (!(b.links ?? []).includes(aId)) {
-      await ctx.db.patch(bId, { links: [...(b.links ?? []), aId], updatedAt: now });
+      const links = [...(b.links ?? []), aId];
+      arrayCapacity(links, "Task links", 200); requirePayload({ ...b, links }, "Linked task");
+      await ctx.db.patch(bId, { links, updatedAt: now });
     }
     return null;
   },
@@ -662,7 +670,7 @@ export const disconnect = mutation({
     requireKey(apiKey);
     const now = Date.now();
     for (const [id, otherId] of [[aId, bId], [bId, aId]] as const) {
-      const t = await ctx.db.get(id);
+      const t = await readTask(ctx, id);
       if (t && (t.links ?? []).includes(otherId)) {
         const rest = t.links!.filter((l) => l !== otherId);
         // A last-edge removal drops the field entirely (matches merge — no empty husk).
@@ -679,7 +687,7 @@ export const confirmProposed = mutation({
   returns: v.null(),
   handler: async (ctx, { apiKey, id }) => {
     requireKey(apiKey);
-    const task = await ctx.db.get(id);
+    const task = await readTask(ctx, id);
     if (!task) throw new ConvexError(`Task ${id} not found.`);
     await ctx.db.patch(id, { needsReview: false, updatedAt: Date.now() });
     return null;

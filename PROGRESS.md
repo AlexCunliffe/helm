@@ -395,3 +395,15 @@ Validation: older filtered terminal matches, multi-page history including empty 
 QC repair 8 complete (CVX-02; query portion of CVX-03): filters precede result limits, indexed history has a continuation API, and complete reads enforce explicit row/byte capacities without returning inaccurate counts. Daily existence checks avoid reading the completion archive for streaks.
 
 Validation: 47 independent query/MCP scenarios passed. TypeScript, development push, 224 backend assertions, hook/OAuth/calendar suites, and real stdio MCP tests passed. The hosted byte-limit test returned four 600 KiB records and two small records exactly once across three pages. Mutation capacities and background batching remain open for CVX-03/CVX-09.
+
+## QC repair 9 plan: bound mutations and continue background wakes
+
+Findings: remaining CVX-03 and CVX-09. Apply explicit read and payload capacities to growing write paths. Bound choice, delegation, relationship, and reconciliation inputs. Process expired snoozes in byte-bounded batches, serialize scheduled continuations, preserve current user ordering, and recover from failed scheduled jobs. Preserve oversized legacy check-ins while allowing status-only background progress.
+
+Validation: atomic rejection of oversized inputs, invalid date windows, full backlog progress, byte-heavy batches, cron overlap, stale continuations, current-order preservation, failed-job recovery, and legacy check-in fallback. Use isolated and always-rollback hosted probes, TypeScript, development push, full backend/MCP suites, and independent verification.
+
+The independent verifier found that JSON-encoded byte estimates can overcount control characters enough to stall a valid large task or legacy check-in. Capacity accounting now uses Convex's own value-size function. The hosted rollback probe includes large escaped text in both records.
+
+QC repair 9 complete (remaining CVX-03 and CVX-09): every growing read path has an explicit operation capacity. Choice, reconciliation, delegation, and relationship writes reject oversized inputs atomically. Snooze processing commits bounded batches, coordinates continuation ownership, resumes failed jobs, preserves current retained order, and continues past oversized legacy check-ins. Byte accounting uses Convex value sizes.
+
+Validation after the escaped-text correction: TypeScript and development push passed; all 234 backend assertions, 224 always-rollback wake checks, 14 calendar rollback checks, the hosted calendar runtime probe, hook/OAuth/calendar suites, and real MCP tests passed. Independent verification passed 40 mutation/scheduler scenarios, 47 repeated query scenarios, and seven actual stdio MCP cap/exposure checks. No confirmed issue remains in these two findings within the documented capacities.
