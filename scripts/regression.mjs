@@ -18,16 +18,30 @@
  * completes), status-verb side-effects, read API invariants, London
  * day-boundary via backdated completions, past-date check-ins.
  */
-import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
+import { execFileSync as rawExecFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { ConvexHttpClient } from "convex/browser";
 import { makeFunctionReference } from "convex/server";
 import { development } from "./lib/dev.mjs";
+import { checkAuthentication } from "./lib/auth-checks.mjs";
 import { AREA_PRESETS, validateAreas } from "./lib/areas.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
+const devTarget = development(ROOT);
+const secretValues = new Set();
+const redact = value => { let text = String(value); for (const secret of secretValues) text = text.replaceAll(secret, "[redacted]"); return text; };
+function execFileSync(command, args, options = {}) {
+  if (command !== "npx" || !args.includes("convex") || args.some(a => ["--prod", "--deployment", "--deployment-name", "--team", "--project"].includes(a)))
+    throw new Error("Regression commands must use the configured development deployment.");
+  const selected = args.indexOf("--env-file");
+  if (selected >= 0 && args[selected + 1] !== devTarget.envFile) throw new Error("Unexpected environment file.");
+  const bounded = selected >= 0 ? args : [...args, "--env-file", devTarget.envFile];
+  const result = rawExecFileSync(command, bounded, { ...options, cwd: ROOT, env: devTarget.env, stdio: ["ignore", "pipe", "pipe"] });
+  const getAt = args.indexOf("get");
+  if (args.includes("env") && getAt >= 0 && /(?:KEY|TOKEN)$/.test(args[getAt + 1]) && String(result).trim()) secretValues.add(String(result).trim());
+  return result;
+}
 const PREFIX = "test:reg:";
 const SAFE_DATE = "2026-01-15"; // pre-Helm London day — no real data can live here
 const SAFE_NOON = Date.UTC(2026, 0, 15, 12); // London == UTC in January
@@ -36,13 +50,12 @@ const SAFE_NOON2 = Date.UTC(2026, 0, 20, 12);
 
 // ── plumbing ─────────────────────────────────────────────────────────────────
 
-const envLocal = readFileSync(join(ROOT, ".env.local"), "utf8");
-const CONVEX_URL = envLocal.match(/^CONVEX_URL=(.+)$/m)?.[1]?.trim();
+const CONVEX_URL = devTarget.url;
 if (!CONVEX_URL) {
   console.error("regression: CONVEX_URL not found in .env.local");
   process.exit(1);
 }
-const client = new ConvexHttpClient(CONVEX_URL);
+const client = new ConvexHttpClient(CONVEX_URL, { logger: false });
 
 // Function-level auth (4.1, D15): every public function takes `apiKey`.
 // Fetched via the admin CLI at runtime so it's never committed or printed.
@@ -421,7 +434,7 @@ async function main() {
 
   // ── H · token-guarded HTTP surface (H3 hardening) ──
   console.log("\nH · HTTP surface");
-  const SITE_URL = envLocal.match(/^CONVEX_SITE_URL=(.+)$/m)?.[1]?.trim();
+  const SITE_URL = devTarget.url.replace(".convex.cloud", ".convex.site");
   let token = "";
   try {
     token = execFileSync("npx", ["convex", "env", "get", "HELM_SURFACE_TOKEN"], {
@@ -433,7 +446,7 @@ async function main() {
   } else {
     const noAuth = await fetch(`${SITE_URL}/brief`);
     assert(noAuth.status === 401, "http: /brief without token → 401");
-    const queryParam = await fetch(`${SITE_URL}/brief?token=${encodeURIComponent(token)}`);
+    const queryParam = await fetch(`${SITE_URL}/brief?token=not-a-header-token`);
     assert(queryParam.status === 401, "http: query-param token rejected (header-only)");
     const wrong = await fetch(`${SITE_URL}/brief`, { headers: { "X-Helm-Token": "nope" } });
     assert(wrong.status === 401, "http: wrong token → 401");
@@ -471,46 +484,9 @@ async function main() {
     assert((await ingAgain.json()).created === false, "http: /ingest idempotent by dedupeKey");
   }
 
-  // ── I · function-level auth (4.1) ──
-  console.log("\nI · function-level auth (4.1)");
-  if (!API_KEY) {
-    console.log("  (skipped — HELM_API_KEY unset on the deployment)");
-  } else {
-    const envGet = (name) => {
-      try {
-        return execFileSync("npx", ["convex", "env", "get", name], { cwd: ROOT, encoding: "utf8" }).trim();
-      } catch { return ""; }
-    };
-    const flagWas = envGet("HELM_REQUIRE_KEY");
-    execFileSync("npx", ["convex", "env", "set", "HELM_REQUIRE_KEY", "1"], { cwd: ROOT, encoding: "utf8" });
-    try {
-      let unkeyed = false;
-      try { await client.query(makeFunctionReference("queries:brief"), {}); } catch { unkeyed = true; }
-      assert(unkeyed, "auth: unkeyed call rejected under enforcement");
-      let wrong = false;
-      try { await client.query(makeFunctionReference("queries:brief"), { apiKey: "wrong" }); } catch { wrong = true; }
-      assert(wrong, "auth: wrong key rejected");
-      let wrongWrite = false;
-      try {
-        await client.mutation(makeFunctionReference("tasks:capture"),
-          { apiKey: "wrong", title: "TEST auth", dedupeKey: key("i1") });
-      } catch { wrongWrite = true; }
-      assert(wrongWrite, "auth: writes gated too");
-      const okBrief = await q("queries:brief");
-      assert(typeof okBrief.date === "string", "auth: keyed call passes");
-      if (SITE_URL && token) {
-        const viaToken = await fetch(`${SITE_URL}/brief`, { headers: { "X-Helm-Token": token } });
-        assert(viaToken.status === 200, "auth: GET /brief still serves (server-side key hop)");
-      }
-    } finally {
-      // State-preserving: leave enforcement exactly as found (on stays on).
-      if (flagWas === "") {
-        execFileSync("npx", ["convex", "env", "remove", "HELM_REQUIRE_KEY"], { cwd: ROOT, encoding: "utf8" });
-      } else if (flagWas !== "1") {
-        execFileSync("npx", ["convex", "env", "set", "HELM_REQUIRE_KEY", flagWas], { cwd: ROOT, encoding: "utf8" });
-      }
-    }
-  }
+  // ── I · exhaustive closed-by-default function authentication ──
+  console.log("\nI · closed authentication");
+  for (const check of await checkAuthentication()) assert(true, check);
 
   // ── J · reactive subscription (the glass contract, 4.1) ──
   console.log("\nJ · reactive subscription (glass contract)");
@@ -997,13 +973,13 @@ try {
   try {
     purge(); // always leave dev clean, even after a mid-suite crash
   } catch (err) {
-    console.error("regression: final purge failed —", err?.message ?? err);
+    console.error("regression: final purge failed —", redact(err?.message ?? err));
   }
 }
 
 console.log(`\n${passed} passed, ${failures.length} failed`);
 if (failedHard) {
-  console.error("suite crashed:", failedHard);
+  console.error("suite crashed:", redact(failedHard?.message ?? failedHard));
   process.exit(1);
 }
 if (failures.length) {

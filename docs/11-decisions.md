@@ -14,7 +14,7 @@
 - **D12 · Calendar.** Optional Google Calendar sync maintains a rolling meeting window. Optional AI actions use a separately configured key.
 - **D13 · Surface token.** HTTP clients use a header token. The token currently permits brief reads and capture proposals.
 - **D14 · Effort.** Use `size` for effort. Use `startedAt` for the start time.
-- **D15 · Function authentication.** The single-user implementation uses an API key argument. The imported gate requires `HELM_REQUIRE_KEY=1`; closing the default is pending.
+- **D15 · Function authentication.** The single-user implementation uses an API key argument. The gate is closed by default. `HELM_ALLOW_ANON=1` permits anonymous access and warns on every call. The old `HELM_REQUIRE_KEY` flag has no effect.
 - **D16 · Browser client.** The imported page uses a pinned browser-client import. Bundling it into the page is pending.
 - **D17 · Merge safety.** Follow `mergedInto` pointers during dedupe lookup. Preserve source keys and merge provenance.
 

@@ -27,13 +27,13 @@ if (!CONVEX_URL) {
 }
 
 // Function-level auth (4.1, D15): every public Helm function requires the
-// shared API key. Missing key = every call will be rejected once the
-// deployment enforces (HELM_REQUIRE_KEY=1) — warn loudly but stay up, so the
+// shared API key. Missing key = every call is rejected by default.
+// Warn loudly but stay up, so the
 // error surfaces per-call rather than as a silent dead server.
 const API_KEY = process.env.HELM_API_KEY;
 if (!API_KEY) {
   console.error(
-    "helm-mcp: HELM_API_KEY is not set — calls will fail once the deployment enforces keys. " +
+    "helm-mcp: HELM_API_KEY is not set — calls are rejected by default. " +
       "Re-register the MCP server with HELM_API_KEY in its environment.",
   );
 }

@@ -5,9 +5,8 @@
  * SessionEnd hook and regression harness all present the same key; internal
  * functions (cron waker, test janitor) never need one.
  *
- * `HELM_REQUIRE_KEY=1` gates enforcement so the whole client fleet can be
- * upgraded to send the key BEFORE the flip — once on, it stays on. Fail
- * closed: enforcement demanded with no key configured rejects everything.
+ * Authentication is required by default. HELM_ALLOW_ANON=1 is an explicit
+ * development opt-out; every anonymous call emits a warning.
  */
 import { ConvexError } from "convex/values";
 
@@ -33,7 +32,10 @@ export function timingSafeEqual(a: string, b: string): boolean {
  * rotated key. ConvexError data survives to the client on prod.
  */
 export function requireKey(apiKey: string | undefined): void {
-  if (process.env.HELM_REQUIRE_KEY !== "1") return; // migration mode: fleet not yet flipped
+  if (process.env.HELM_ALLOW_ANON === "1") {
+    console.warn("HELM_ALLOW_ANON=1: public Helm functions permit unauthenticated access.");
+    return;
+  }
   const expected = process.env.HELM_API_KEY;
   if (!expected) {
     throw new ConvexError("unauthorized: HELM_API_KEY is not configured (failing closed)");

@@ -147,3 +147,19 @@ Files: authentication helper, MCP warning text, development test plumbing, and e
 Checks: enumerate every public function from development metadata; supply valid argument shapes; reject missing and wrong keys; remove key-related environment values and verify every public function returns unauthorized; keep the page public and data routes closed; verify repeated opt-out warnings; restore all credentials in memory; run the full regression.
 
 Done criteria: an unconfigured installation cannot read or mutate task data through public functions.
+
+### Slice 6 result
+
+Completed. TypeScript and the development push pass. All 187 regression checks pass. Every one of the 42 public functions rejects missing and incorrect keys. Every one also returns unauthorized with no configured API key. The open page and closed HTTP data routes behave as intended. Two opt-out calls produced two warnings. Credentials and normal access were restored successfully.
+
+The focused restoration test also passed after moving secret values from process arguments to stdin. Regression commands now verify their development target and ignore inherited deployment selectors. Error output redacts fetched secrets. HTTP rejection tests use a dummy query token instead of putting a real token in a URL.
+
+## Stage 3 · Slice 7 plan: key minting and rotation
+
+Goal: mint independent strong credentials and rotate the development API key and surface token from the terminal.
+
+Files: secret helper, rotation command, package script, and CLI integration test.
+
+Checks: dry-run preserves values; minted values are distinct 48-character hex strings; rotation sets and reads them through stdin and memory; new keys work and old keys fail; command output contains neither old nor new keys; full development regression after rotation.
+
+Done criteria: rotation succeeds on development, explains which clients to update, and prints no secret.
