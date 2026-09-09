@@ -1,0 +1,31 @@
+{
+  "name": "helm",
+  "version": "0.1.0",
+  "private": false,
+  "type": "module",
+  "description": "Helm \u2014 a founder's external executive function (task + accountability brain on Convex)",
+  "scripts": {
+    "dev": "convex dev",
+    "deploy": "convex deploy",
+    "test": "node scripts/regression.mjs",
+    "glass:embed": "node scripts/embed-glass.mjs",
+    "oss:lint": "node scripts/oss-lint.mjs"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.110.0",
+    "convex": "^1.42.0"
+  },
+  "devDependencies": {
+    "@types/node": "^26.0.0",
+    "typescript": "^5.6.0"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/AlexCunliffe/helm.git"
+  },
+  "author": "Alex Cunliffe",
+  "engines": {
+    "node": ">=20"
+  }
+}

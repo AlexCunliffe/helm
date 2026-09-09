@@ -1,0 +1,17 @@
+node_modules/
+.env
+.env.local
+.env.*.local
+.convex/
+dist/
+build/
+.DS_Store
+*.log
+
+# secrets are pointers — never commit real ones
+
+# Generated bindings and local configuration
+convex/_generated/
+.oss-denylist
+scripts/oss-denylist.txt
+settings.local.json

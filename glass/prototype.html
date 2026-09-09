@@ -1,0 +1,2275 @@
+<!doctype html>
+<!--
+  Helm — the glass · Phase 4 web surface (WIRED, slice 4.8)
+  Web interface (docs/06-surfaces.md); wired to the Convex brain the same
+  week per docs/04-functions-and-api.md: live ConvexClient subscriptions paint the page, verbs
+  write straight back with the shared API key (D15). Single self-contained
+  file, no build step — ConvexClient arrives via a pinned esm.sh import
+  (D16); served from the deployment itself at GET /glass (D10) via
+  `npm run glass:embed`. Server behaviours (snooze-waker return-to-Now,
+  T-30 meeting-prep promotion) are rendered, never reimplemented.
+  AI passes (enrich / polish / NL search) degrade gracefully until
+  ANTHROPIC_API_KEY is set.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<style>:root{color-scheme:light}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#faf9f5;color:#141413}img{max-width:100%}</style>
+</head>
+<body>
+<title>Helm — the glass</title>
+<style>
+  :root{
+    --ground:#F6F8FA; --card:#FFFFFF; --ink:#18222E; --sub:#5D6B7A; --faint:#93A1AF;
+    --hair:#E5EAEF; --hair2:#D4DCE4;
+    --amber:#D97706; --amber-bg:#FEF3E2;
+    --green:#16A34A; --green-bg:#EAF7EF;
+    --violet:#9333EA; --violet-bg:#F5EDFC;
+    --teal:#0891B2; --teal-bg:#E7F6FA;
+    --sans:-apple-system,BlinkMacSystemFont,'Segoe UI','Helvetica Neue',system-ui,Arial,sans-serif;
+    --mono:ui-monospace,'SF Mono',Menlo,Consolas,monospace;
+    --shadow:0 1px 2px rgba(24,34,46,.05),0 8px 28px -10px rgba(24,34,46,.12);
+    --shadow-lift:0 2px 4px rgba(24,34,46,.06),0 18px 44px -14px rgba(24,34,46,.18);
+  }
+  html{background:var(--ground)}
+  body{background:var(--ground);color:var(--ink);font-family:var(--sans);margin:0;
+    -webkit-font-smoothing:antialiased}
+  .wrap{max-width:620px;margin:0 auto;padding:44px 20px 64px;min-height:100vh;box-sizing:border-box}
+
+  .rise{opacity:0;transform:translateY(14px);animation:rise .7s cubic-bezier(.2,.7,.2,1) forwards}
+  @keyframes rise{to{opacity:1;transform:none}}
+  .d1{animation-delay:.05s}.d2{animation-delay:.15s}.d3{animation-delay:.3s}.d4{animation-delay:.45s}.d5{animation-delay:.58s}
+
+  /* ---- focus mode: the world steps out ---- */
+  .settled .rise{animation:none;opacity:1;transform:none}
+  .hideable{transition:transform .6s cubic-bezier(.2,.7,.2,1),opacity .45s ease}
+  .focusing .hideable{transition:transform .55s cubic-bezier(.55,0,.8,.4),opacity .4s ease}
+  .focusing .h-up{transform:translateY(-60vh);opacity:0;pointer-events:none}
+  .focusing .h-down{transform:translateY(60vh);opacity:0;pointer-events:none}
+  .focusing #stage .card{box-shadow:var(--shadow-lift)}
+
+  /* ---- masthead ---- */
+  .mast{display:flex;justify-content:space-between;align-items:baseline;gap:12px}
+  .wordmark{font-size:17px;font-weight:700;letter-spacing:-.01em}
+  .wordmark span{color:var(--area,#2563EB);transition:color .6s}
+  .watch{display:flex;gap:16px;align-items:baseline;font-family:var(--mono);font-size:12.5px;
+    color:var(--sub);font-variant-numeric:tabular-nums}
+  .watch b{color:var(--ink);font-weight:600}
+  #clock .colon{display:inline-block;animation:colonblink 2s ease-in-out infinite}
+  @keyframes colonblink{0%,100%{opacity:1}50%{opacity:.15}}
+  .daybtn{background:none;border:none;font-family:var(--mono);font-size:12.5px;color:var(--sub);
+    cursor:pointer;padding:0;border-bottom:1px dashed var(--hair2);transition:color .2s}
+  .daybtn:hover{color:var(--ink)}
+  .daybtn:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+  .greet{font-size:15px;color:var(--sub);margin:12px 0 0;font-weight:500}
+
+  /* ---- day thread ---- */
+  .thread{margin:20px 0 22px;position:relative;height:28px}
+  .thread .rail{position:absolute;top:7px;left:0;right:0;height:3px;border-radius:2px;background:var(--hair)}
+  .thread .burn{position:absolute;top:7px;left:0;height:3px;border-radius:2px;
+    background:var(--area,#2563EB);transition:width 1.2s ease,background .6s}
+  .thread .now-dot{position:absolute;top:3.5px;width:10px;height:10px;border-radius:50%;
+    background:var(--area,#2563EB);border:2px solid #fff;box-sizing:border-box;
+    box-shadow:0 1px 3px rgba(24,34,46,.25);transform:translateX(-5px);transition:left 1.2s ease,background .6s}
+  .thread .tlabel{position:absolute;top:-16px;font-family:var(--mono);font-size:10px;color:var(--faint);
+    transform:translateX(-50%)}
+
+  /* ---- thread event markers ---- */
+  .tmwrap{position:absolute;top:2.5px;transform:translateX(-50%);display:flex;
+    flex-direction:column;align-items:center;z-index:2;cursor:default}
+  .tmark{width:9px;height:9px;background:var(--card);border:2px solid var(--faint);
+    border-radius:2px;box-sizing:border-box;transform:rotate(45deg);
+    transition:border-color .3s,background .3s}
+  .tmwrap.soon .tmark{border-color:var(--amber);background:var(--amber-bg)}
+  .tmwrap.offedge .tmark{border-style:dashed;opacity:.7}
+  .tmtime{margin-top:5px;font-family:var(--mono);font-size:9.5px;color:var(--faint);
+    font-variant-numeric:tabular-nums;white-space:nowrap}
+  .tmwrap.soon .tmtime{color:var(--amber);font-weight:600}
+  .tmcard{position:absolute;bottom:calc(100% + 7px);left:50%;transform:translateX(-50%);
+    background:var(--card);border:1px solid var(--hair);border-radius:8px;padding:6px 11px;
+    font-size:11px;font-weight:600;color:var(--ink);white-space:nowrap;
+    box-shadow:var(--shadow-lift);opacity:0;pointer-events:none;transition:opacity .2s}
+  .tmcard b{font-family:var(--mono);font-weight:700;color:var(--amber)}
+  .tmwrap:hover .tmcard{opacity:1}
+  .tmwrap.edge-r .tmcard{left:auto;right:-10px;transform:none}
+
+  /* ---- drag-to-park on the timeline ---- */
+  body.dragging{user-select:none;cursor:grabbing}
+  body.dragging .thread{opacity:1 !important}
+  body.dragging .thread .rail{background:var(--hair2)}
+  .card .eyebrow,.card .title{cursor:grab}
+  .t3 .row[data-tid]{cursor:grab}
+  .drow[data-dkind],.drow[data-tid]{cursor:grab}
+  .tmwrap.sched{cursor:grab}
+  #dragGhost{position:fixed;z-index:100;display:flex;align-items:center;gap:8px;
+    background:var(--card);border:1px solid var(--hair2);border-radius:999px;padding:7px 14px;
+    font-size:12.5px;font-weight:600;color:var(--ink);box-shadow:var(--shadow-lift);
+    pointer-events:none;max-width:280px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  #draghint{position:absolute;bottom:calc(100% + 7px);transform:translateX(-50%);
+    background:var(--ink);color:#fff;border-radius:8px;padding:6px 11px;font-size:11px;
+    font-weight:700;font-family:var(--mono);white-space:nowrap;pointer-events:none;
+    opacity:0;transition:opacity .15s;z-index:5}
+  #draghint.on{opacity:1}
+  #dragslot{position:absolute;top:2.5px;width:9px;height:9px;border:2px dashed var(--ink);
+    border-radius:2px;transform:translateX(-50%) rotate(45deg);box-sizing:border-box;
+    opacity:0;z-index:3;pointer-events:none}
+  #dragslot.on{opacity:1}
+  .tmwrap.sched .tmark{border-radius:50%}
+  .upcard{display:flex;align-items:center;gap:10px;margin-top:10px;padding:10px 16px;
+    background:var(--card);border:1px dashed var(--hair2);border-radius:12px;
+    font-size:12.5px;color:var(--sub);opacity:.85;animation:enter .35s ease}
+  .upcard svg{color:var(--faint);flex:none}
+  .upcard .uptime{font-family:var(--mono);font-weight:600;color:var(--ink);flex:none;
+    font-variant-numeric:tabular-nums}
+  .upcard .uptitle{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+  .upcard .upmore{color:var(--faint);font-size:11px;flex:none}
+  .upcard .mini{margin-left:auto}
+  .upcard{position:relative}
+  .upcard .upmore{cursor:pointer;text-decoration:underline dotted;text-underline-offset:2px}
+  .upcard .upmore:hover,.upcard .upmore:focus-visible{color:var(--sub);outline:none}
+  /* hover → full info on the next upcoming task */
+  .uppop{position:absolute;left:14px;bottom:calc(100% + 8px);z-index:20;min-width:230px;max-width:330px;
+    background:var(--card);border:1px solid var(--hair2);border-radius:12px;
+    box-shadow:0 8px 28px rgba(20,34,46,.14);padding:12px 14px;text-align:left;
+    opacity:0;transform:translateY(4px);pointer-events:none;transition:opacity .14s,transform .14s}
+  .upcard:hover .uppop,.upcard:focus-within .uppop{opacity:1;transform:translateY(0)}
+  .uppop .pt{display:flex;align-items:flex-start;gap:7px;font-weight:600;color:var(--ink);
+    font-size:13px;line-height:1.4;margin-bottom:6px;white-space:normal}
+  .uppop .pmeta{font-family:var(--mono);font-size:11px;color:var(--sub);margin-bottom:6px}
+  .uppop .pctx{font-size:12px;color:var(--sub);line-height:1.5;white-space:normal}
+  .uppop .parea{font-size:11px;color:var(--faint);margin-top:6px;text-transform:capitalize}
+  /* click → the rest of the timeline as a list */
+  .uplist{margin-top:8px;border:1px dashed var(--hair2);border-radius:12px;overflow:hidden;animation:enter .25s ease}
+  .uprow{display:flex;align-items:center;gap:9px;padding:8px 14px;font-size:12.5px;color:var(--sub);border-top:1px solid var(--hair)}
+  .uprow:first-child{border-top:none}
+  .uprow .ut{font-family:var(--mono);font-weight:600;color:var(--ink);flex:none;min-width:56px;font-variant-numeric:tabular-nums}
+  .uprow .un{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;flex:1;color:var(--ink)}
+  .uprow .uc{color:var(--faint);font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:36%;flex:none}
+  .uprow .mini{margin-left:auto}
+
+  /* ---- energy toggle (header) ---- */
+  .ebtn{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;
+    border-radius:8px;border:1px solid var(--hair);cursor:pointer;flex:none;align-self:center;
+    transition:background .3s,color .3s,border-color .3s,transform .12s}
+  .ebtn:hover{transform:translateY(-1px)}
+  .ebtn:active{transform:scale(.95)}
+  .ebtn:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+  .ebtn.e-light{background:var(--amber-bg);color:var(--amber);border-color:transparent}
+  .ebtn.e-steady{background:var(--card);color:var(--sub)}
+  .ebtn.e-deep{background:var(--violet-bg);color:var(--violet);border-color:transparent}
+  .ebtn svg{animation:pop .35s cubic-bezier(.3,1.6,.5,1)}
+
+  /* ---- attention system: one loud thing at a time ---- */
+  body:not(.focusing) .zone{opacity:.75}
+  body:not(.focusing) .zone:hover{opacity:1}
+  body.card-hover:not(.focusing) .zone{opacity:.45}
+  #stage{transition:opacity .35s ease}
+  body.zone-hover:not(.focusing) #stage{opacity:.85}
+
+  /* ---- omnibox palette ---- */
+  #palette{position:fixed;inset:0;z-index:60;display:none}
+  #palette.open{display:block}
+  .pback{position:absolute;inset:0;background:rgba(24,34,46,.35);animation:fadeIn .25s ease}
+  @keyframes fadeIn{from{opacity:0}}
+  .pbox{position:relative;max-width:560px;margin:11vh auto 0;background:var(--card);border-radius:16px;
+    box-shadow:0 24px 80px -20px rgba(24,34,46,.45);overflow:hidden;
+    animation:enter .3s cubic-bezier(.2,.7,.2,1)}
+  .pinput{display:flex;align-items:center;gap:11px;padding:11px 12px 11px 18px;border-bottom:1px solid var(--hair)}
+  .pinput svg{color:var(--faint);flex:none}
+  .pinput input{flex:1;border:none;outline:none;font-family:var(--sans);font-size:15px;
+    color:var(--ink);background:none;min-width:0}
+  .pinput input::placeholder{color:var(--faint)}
+  .plist{max-height:46vh;overflow-y:auto;padding:6px 10px 10px}
+  .plist:empty{padding:0}
+  .plist .capcard{margin:10px 6px;box-shadow:none}
+  @media(max-width:600px){.pbox{margin:7vh 14px 0}}
+  .capgo{flex:none;background:var(--ink);color:#fff;border:none;border-radius:10px;
+    font-family:var(--sans);font-size:12.5px;font-weight:600;padding:9px 16px;cursor:pointer;
+    transition:opacity .2s,transform .12s;min-width:86px}
+  .capgo:hover{opacity:.92;transform:translateY(-1px)}
+  .capgo:active{transform:scale(.97)}
+  .capgo:disabled{opacity:.6;cursor:default;transform:none}
+  .capgo .dots span{animation:blink 1.2s infinite;display:inline-block}
+  .capgo .dots span:nth-child(2){animation-delay:.2s}
+  .capgo .dots span:nth-child(3){animation-delay:.4s}
+  @keyframes blink{0%,60%,100%{opacity:.25}30%{opacity:1}}
+  .capcard{background:var(--card);border:1px solid var(--hair);border-radius:14px;
+    box-shadow:var(--shadow);padding:14px 16px;margin:-6px 0 18px;animation:enter .4s cubic-bezier(.2,.7,.2,1);
+    transition:opacity .4s,transform .4s}
+  .capcard.out{opacity:0;transform:translateY(-8px)}
+  .capcard .l1{display:flex;align-items:center;gap:10px}
+  .capcard .l1 svg{color:var(--green);flex:none}
+  .capcard .l1 .ct{font-size:14px;font-weight:600;flex:1;min-width:0}
+  .capcard .l2{display:flex;align-items:center;gap:8px;margin:9px 0 0;flex-wrap:wrap}
+  .capcard .tagchip{font-size:11px;font-weight:600;border-radius:999px;padding:3px 11px}
+  .capcard .eff-light{background:var(--teal-bg);color:var(--teal)}
+  .capcard .eff-steady{background:#EFF2F5;color:var(--sub)}
+  .capcard .eff-deep{background:var(--violet-bg);color:var(--violet)}
+  .capcard .cctx{font-size:12px;color:var(--faint);line-height:1.5}
+
+  /* ---- now card ---- */
+  #stage{position:relative;min-height:300px;--area:#2563EB;--area-bg:#EBF1FE}
+  .card{background:var(--card);border:1px solid var(--hair);border-radius:20px;
+    padding:26px 28px 24px;position:relative;overflow:hidden;box-shadow:var(--shadow);
+    transition:box-shadow .3s}
+  .card:hover{box-shadow:var(--shadow-lift)}
+  .card::before{content:"";position:absolute;top:0;left:0;right:0;height:4px;
+    background:var(--area);transition:background .6s}
+  .eyebrow{display:flex;align-items:center;gap:10px;margin-bottom:16px}
+  .beacon{width:8px;height:8px;border-radius:50%;background:var(--area);position:relative;flex:none;
+    transition:background .6s}
+  .beacon::after{content:"";position:absolute;inset:-5px;border-radius:50%;
+    border:2px solid var(--area);opacity:0;animation:pulse 3s ease-out infinite;transition:border-color .6s}
+  @keyframes pulse{0%{transform:scale(.4);opacity:.6}70%{transform:scale(1.35);opacity:0}100%{opacity:0}}
+  .rightnow{font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--area);transition:color .6s}
+  .promoted-tag{font-size:10.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;
+    color:var(--amber);background:var(--amber-bg);border-radius:999px;padding:3px 10px}
+  .area-chip{margin-left:auto;font-size:11.5px;font-weight:600;letter-spacing:.04em;
+    color:var(--area);background:var(--area-bg);border-radius:999px;padding:4px 13px;
+    transition:color .6s,background .6s}
+  .title{font-size:25px;line-height:1.32;font-weight:700;letter-spacing:-.02em;margin:0 0 14px;
+    text-wrap:balance;position:relative;display:inline}
+  .title .strike{position:absolute;left:0;top:54%;height:2px;width:100%;background:var(--area);
+    border-radius:1px;transform:scaleX(0);transform-origin:left center}
+  .completing .title .strike{animation:strike .45s ease forwards}
+  @keyframes strike{to{transform:scaleX(1)}}
+  .ctx{display:flex;gap:9px;align-items:flex-start;color:var(--sub);font-size:14px;line-height:1.55;margin:12px 0 4px}
+  .ctx svg{flex:none;margin-top:3px;color:var(--faint)}
+  .src{display:inline-flex;align-items:center;gap:7px;color:var(--area);font-size:13px;font-weight:600;
+    text-decoration:none;margin:8px 0 16px;transition:color .6s,opacity .2s}
+  .src:hover{opacity:.75}
+
+  .frow{display:flex;gap:9px;max-height:0;opacity:0;overflow:hidden;margin-bottom:0;
+    transition:max-height .35s cubic-bezier(.2,.7,.2,1),opacity .3s,margin-bottom .3s}
+  .card:hover .frow,.card:focus-within .frow,.card.timer-on .frow{
+    max-height:60px;opacity:1;margin-bottom:10px}
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;
+    background:#fff;border:1px solid var(--hair2);border-radius:12px;color:var(--ink);
+    font-family:var(--sans);font-size:13.5px;font-weight:600;padding:12px 8px;cursor:pointer;
+    transition:border-color .2s,background .2s,transform .12s,box-shadow .2s,color .2s}
+  .btn:hover{box-shadow:0 2px 8px rgba(24,34,46,.08);transform:translateY(-1px)}
+  .btn:active{transform:scale(.97)}
+  .btn:focus-visible{outline:2px solid var(--area);outline-offset:2px}
+  .btn .kbd{font-family:var(--mono);font-size:10px;font-weight:400;color:var(--faint);
+    border:1px solid var(--hair);border-radius:4px;padding:1px 5px;margin-left:2px}
+  .frow .btn{flex:1;padding:10px 8px;font-size:12.5px;color:var(--sub)}
+  .frow .btn svg{color:var(--area);transition:color .6s}
+  .frow .btn.running{border-color:var(--area);color:var(--ink);font-family:var(--mono);font-variant-numeric:tabular-nums}
+  .acts{display:flex;gap:9px;border-top:1px solid var(--hair);padding-top:16px;position:relative}
+  .acts .btn{flex:1}
+  .btn.done-btn{background:var(--area);border-color:var(--area);color:#fff;transition:background .6s,border-color .6s,transform .12s,box-shadow .2s}
+  .btn.done-btn .kbd{color:rgba(255,255,255,.75);border-color:rgba(255,255,255,.35)}
+  .btn.done-btn:hover{filter:brightness(1.07);box-shadow:0 4px 14px -4px var(--area)}
+  .fbar{position:absolute;bottom:0;left:0;height:3px;background:var(--area);width:0;
+    transition:width 1s linear,background .6s}
+  .timesup{display:flex;align-items:center;gap:10px;background:var(--amber-bg);border-radius:12px;
+    padding:10px 14px;margin-bottom:10px;font-size:13px;font-weight:600;color:var(--amber);
+    animation:enter .35s ease}
+  .timesup .mini{margin-left:auto}
+
+  .kick{overflow:hidden;max-height:0;opacity:0;transition:max-height .4s cubic-bezier(.2,.7,.2,1),opacity .3s,margin .3s;margin:0}
+  .kick.open{max-height:260px;opacity:1;margin:0 0 12px}
+  .kick .kbox{background:var(--ground);border:1px dashed var(--hair2);border-radius:12px;padding:14px 16px}
+  .kick .klabel{font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--faint);margin-bottom:7px}
+  .kick .ktext{font-family:var(--mono);font-size:12px;line-height:1.65;color:var(--sub)}
+  .kick .kacts{display:flex;gap:8px;margin-top:12px}
+  .kick .mini{background:#fff}
+  .kick .mini.go{background:var(--area);border-color:var(--area);color:#fff}
+
+  .card.leave-up{animation:leaveUp .5s cubic-bezier(.5,0,.8,.4) forwards}
+  @keyframes leaveUp{to{opacity:0;transform:translateY(-22px) scale(.985)}}
+  .card.leave-left{animation:leaveLeft .38s cubic-bezier(.5,0,.8,.4) forwards}
+  @keyframes leaveLeft{to{opacity:0;transform:translateX(-36px)}}
+  .card.leave-sink{animation:leaveSink .5s ease forwards}
+  @keyframes leaveSink{to{opacity:0;transform:translateY(26px) scale(.98)}}
+  .card.enter{animation:enter .55s cubic-bezier(.2,.7,.2,1)}
+  @keyframes enter{from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:none}}
+  .card.enter-right{animation:enterRight .45s cubic-bezier(.2,.7,.2,1)}
+  @keyframes enterRight{from{opacity:0;transform:translateX(36px)}to{opacity:1;transform:none}}
+
+  .snooze-pop{position:absolute;bottom:calc(100% + 8px);left:0;right:0;display:flex;
+    flex-direction:column;gap:8px;background:#fff;border:1px solid var(--hair2);
+    border-radius:12px;padding:8px;box-shadow:var(--shadow-lift);animation:enter .25s ease;z-index:2}
+  .snooze-pop .srow{display:flex;gap:8px}
+  .snooze-pop .btn{flex:1;padding:9px 6px;font-size:12.5px}
+  .snote{border:1px solid var(--hair);border-radius:9px;padding:9px 12px;width:100%;
+    box-sizing:border-box;font-family:var(--sans);font-size:12.5px;color:var(--ink);
+    outline:none;transition:border-color .2s;background:var(--ground)}
+  .snote:focus{border-color:var(--area,#2563EB);background:#fff}
+  .snote::placeholder{color:var(--faint)}
+  .upcard .notebtn{margin-left:auto}
+  .upcard .mini+.mini{margin-left:6px}
+  .upcard .snote{flex:1;width:auto;min-width:0}
+
+  .clear{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;
+    justify-content:center;gap:14px;text-align:center;animation:enter .8s ease}
+  .clear .big{font-size:24px;font-weight:700;letter-spacing:-.02em}
+  .clear .sub{color:var(--sub);font-size:14px;max-width:340px;line-height:1.6}
+
+  .spark{position:absolute;width:7px;height:7px;border-radius:50%;pointer-events:none;z-index:5;
+    animation:spark .8s cubic-bezier(.1,.6,.4,1) forwards}
+  @keyframes spark{
+    0%{transform:translate(0,0) scale(1);opacity:1}
+    100%{transform:translate(var(--dx),var(--dy)) scale(.2);opacity:0}}
+
+  /* ---- today's three ---- */
+  .label{font-size:11px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--faint);
+    margin:38px 0 10px;display:flex;align-items:center;gap:12px}
+  .label .rule{flex:1;height:1px;background:var(--hair)}
+  .t3{background:var(--card);border:1px solid var(--hair);border-radius:16px;padding:4px 18px;
+    box-shadow:var(--shadow)}
+  .t3.embed{background:none;border:none;box-shadow:none;padding:0;border-radius:0}
+  #stage{transition:opacity .35s ease,transform .18s ease}
+  #stage.panel-out{opacity:0 !important;transform:translateY(8px)}
+  #stage.panel-in{animation:enter .35s cubic-bezier(.2,.7,.2,1)}
+  .panelcard .eyebrow .rightnow{color:var(--sub)}
+  .panelcard .t3.embed{max-height:340px;overflow-y:auto}
+  .t3 .row{display:flex;align-items:center;gap:13px;padding:14px 2px;border-bottom:1px solid var(--hair);
+    transition:opacity .4s}
+  .t3 .row:last-child{border-bottom:none}
+  .dot{width:8px;height:8px;border-radius:3px;flex:none}
+  .t3 .row .name{font-size:14px;font-weight:500;line-height:1.4;transition:color .4s}
+  .t3 .row.ticked .name{color:var(--faint);text-decoration:line-through;text-decoration-color:var(--hair2)}
+  .t3 .row .age{margin-left:auto;flex:none;display:flex;align-items:center;gap:6px;
+    font-family:var(--mono);font-size:11px;font-weight:600;color:var(--amber);
+    background:var(--amber-bg);border-radius:999px;padding:3px 10px}
+  .label.clickable{cursor:pointer}
+  .label.clickable:hover{color:var(--sub)}
+  .t3pill{display:flex;align-items:center;gap:12px;padding:13px 4px;cursor:pointer;
+    font-size:13px;font-weight:600;color:var(--sub);animation:enter .3s ease}
+  .t3pill .dots{display:flex;gap:5px}
+  .t3pill .dots i{width:9px;height:9px;border-radius:50%;border:1.5px solid var(--hair2);
+    box-sizing:border-box;display:block}
+  .t3pill .dots i.on{background:var(--green);border-color:var(--green)}
+  .t3pill .chev{margin-left:auto;color:var(--faint);font-size:11px;font-weight:500}
+  .ring{flex:none;width:22px;height:22px}
+  .ring circle{fill:none;stroke:var(--hair2);stroke-width:1.8}
+  .ring.on circle{stroke:var(--green)}
+  .ring path{fill:none;stroke:var(--green);stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round;
+    stroke-dasharray:14;stroke-dashoffset:14}
+  .ring.on path{animation:draw .5s .1s ease forwards}
+  @keyframes draw{to{stroke-dashoffset:0}}
+
+  /* ---- below decks ---- */
+  .chips{display:flex;gap:9px;margin-top:34px;flex-wrap:wrap}
+  .chip{border:1px solid transparent;border-radius:999px;font-family:var(--sans);
+    font-size:12.5px;font-weight:600;padding:9px 17px;cursor:pointer;display:inline-flex;
+    gap:8px;align-items:center;background:#EFF2F5;color:var(--sub);
+    transition:box-shadow .2s,transform .12s,border-color .2s,background .3s,color .3s}
+  .chip b{font-family:var(--mono);font-weight:700;font-variant-numeric:tabular-nums}
+  .chip:hover{transform:translateY(-1px);box-shadow:0 2px 8px rgba(24,34,46,.1)}
+  .chip:active{transform:scale(.97)}
+  .chip:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+  .chip.attn-amber{background:var(--amber-bg);color:var(--amber)}
+  .chip.attn-violet{background:var(--violet-bg);color:var(--violet)}
+  .chip.open{border-color:currentColor}
+  #drawer{overflow:hidden;max-height:0;opacity:0;transition:max-height .45s cubic-bezier(.2,.7,.2,1),opacity .35s;
+    margin-top:0}
+  #drawer.open{max-height:640px;opacity:1;margin-top:14px}
+  .fpills{display:flex;gap:6px;flex-wrap:wrap;padding:12px 2px 10px;border-bottom:1px solid var(--hair)}
+  .fpill{border:1px solid var(--hair2);background:#fff;border-radius:999px;font-family:var(--sans);
+    font-size:11px;font-weight:600;color:var(--sub);padding:4px 11px;cursor:pointer;
+    display:inline-flex;align-items:center;gap:6px;transition:background .2s,color .2s,border-color .2s}
+  .fpill .fdot{width:7px;height:7px;border-radius:50%;flex:none}
+  .fpill.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+  .fpill:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+  .scrolly{max-height:400px;overflow-y:auto;padding-bottom:6px}
+  .glabel{font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--faint);
+    padding:14px 2px 4px;display:flex;gap:8px;align-items:baseline}
+  .glabel b{font-family:var(--mono);color:var(--sub);font-weight:600}
+  .allhint{font-size:12px;color:var(--faint);padding:10px 2px 2px;line-height:1.5}
+  .nowtag{font-family:var(--mono);font-size:10.5px;font-weight:700;color:var(--area,#2563EB);flex:none}
+  .dbox{border:1px solid var(--hair);border-radius:16px;background:var(--card);padding:6px 18px;
+    box-shadow:var(--shadow)}
+  .drow{display:flex;align-items:center;gap:12px;padding:13px 2px;border-bottom:1px solid var(--hair);
+    font-size:13.5px;transition:opacity .35s,transform .35s}
+  .drow:last-child{border-bottom:none}
+  .drow .meta{color:var(--faint);font-family:var(--mono);font-size:11px;margin-left:auto;flex:none;
+    display:flex;align-items:center;gap:6px;font-variant-numeric:tabular-nums}
+  .drow .meta.hot{color:var(--amber);font-weight:600}
+  .mini{flex:none;background:#fff;border:1px solid var(--hair2);border-radius:9px;
+    color:var(--sub);font-size:11.5px;font-weight:600;padding:6px 12px;cursor:pointer;font-family:var(--sans);
+    transition:border-color .2s,color .2s,background .2s}
+  .mini:hover{border-color:var(--ink);color:var(--ink)}
+  .mini.yes{background:var(--green-bg);border-color:transparent;color:var(--green)}
+  .mini.yes:hover{border-color:var(--green)}
+  .drow.out{opacity:0;transform:translateX(14px)}
+  .drow .from{color:#fff;font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;
+    flex:none;border-radius:5px;padding:3px 7px}
+  .from.f-granola{background:var(--teal)}
+  .from.f-email{background:var(--violet)}
+
+  /* ---- merge + connect (5.3) ---- */
+  .cluster{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:2px 0 0;font-size:12px;color:var(--sub)}
+  .cluster .clabel{font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:var(--faint)}
+  .lchip{display:inline-flex;align-items:center;gap:6px;padding:3px 11px;border-radius:999px;
+    background:#fff;border:1px solid var(--hair2);font-size:12px;font-weight:600;color:var(--sub);
+    cursor:pointer;font-family:var(--sans);transition:border-color .2s,color .2s}
+  .lchip:hover{border-color:var(--ink);color:var(--ink)}
+  .lchip .fdot{width:7px;height:7px;border-radius:50%;flex:none}
+  .lchip.gone{opacity:.6;cursor:default}
+  .pairbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:10px 12px;margin:10px 0 2px;
+    border:1px solid var(--hair2);border-radius:12px;background:#fff;font-size:12.5px;line-height:1.45}
+  .pairbar b{font-weight:600}
+
+  /* ---- day timeline ---- */
+  #daySec{overflow:hidden;max-height:0;opacity:0;transition:max-height .5s cubic-bezier(.2,.7,.2,1),opacity .4s}
+  #daySec.open{max-height:86vh;opacity:1}
+  .dscroll{max-height:46vh;overflow-y:auto;margin:0 -2px;padding:0 2px}
+  .dnote{font-size:12px;color:var(--sub);line-height:1.45;padding:1px 0 8px 60px}
+  .trow{display:flex;align-items:baseline;gap:12px;padding:12px 2px;border-bottom:1px solid var(--hair);font-size:13.5px}
+  .trow:last-child{border-bottom:none}
+  .trow .tt{font-family:var(--mono);font-size:11.5px;color:var(--faint);flex:none;width:42px;
+    font-variant-numeric:tabular-nums}
+  .badge{flex:none;font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;
+    border-radius:5px;padding:3px 8px;align-self:center}
+  .badge.b-plan{background:var(--green-bg);color:var(--green)}
+  .badge.b-rabbit{background:var(--amber-bg);color:var(--amber)}
+  .trow .meta{margin-left:auto;font-family:var(--mono);font-size:11px;color:var(--faint);flex:none;
+    font-variant-numeric:tabular-nums}
+  .insight{display:flex;gap:10px;align-items:flex-start;background:var(--violet-bg);border-radius:12px;
+    padding:12px 15px;margin:12px 0 4px;font-size:12.5px;line-height:1.55;color:var(--violet)}
+  .insight svg{flex:none;margin-top:2px}
+  .closeday{width:100%;margin:10px 0 8px;padding:12px;background:var(--ink);color:#fff;border:none;
+    border-radius:12px;font-family:var(--sans);font-size:13px;font-weight:600;cursor:pointer;
+    transition:transform .12s,opacity .2s}
+  .closeday:hover{opacity:.92;transform:translateY(-1px)}
+  .closeday:disabled{opacity:.5;cursor:default;transform:none}
+
+  /* ---- search palette ---- */
+  .iconbtn{background:var(--card);border:1px solid var(--hair);border-radius:8px;width:28px;height:28px;
+    display:inline-flex;align-items:center;justify-content:center;color:var(--sub);cursor:pointer;
+    flex:none;align-self:center;transition:border-color .2s,color .2s,transform .12s}
+  .iconbtn:hover{border-color:var(--hair2);color:var(--ink);transform:translateY(-1px)}
+  .iconbtn:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+  .pkbd{font-family:var(--mono);font-size:10px;color:var(--faint);border:1px solid var(--hair);
+    border-radius:4px;padding:2px 6px;flex:none}
+  .caprow{display:flex;align-items:center;gap:10px;padding:12px 12px;border-top:1px solid var(--hair);
+    margin-top:4px;color:var(--sub);cursor:pointer;font-size:13px;font-weight:600;border-radius:0 0 10px 10px;
+    transition:background .15s;background:none;border-left:none;border-right:none;border-bottom:none;
+    width:100%;font-family:var(--sans);text-align:left}
+  .caprow:hover{background:var(--ground)}
+  .caprow svg{color:var(--area,#2563EB);flex:none}
+  .caprow .pkbd{margin-left:auto}
+  .caprow:focus-visible{outline:2px solid var(--ink);outline-offset:-2px}
+  .prow{display:flex;align-items:center;gap:10px;padding:11px 10px;border-radius:10px;font-size:13.5px;
+    transition:background .15s}
+  .prow:hover{background:var(--ground)}
+  .ptitle{flex:1;min-width:0;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .pstatus{flex:none;font-family:var(--mono);font-size:10.5px;color:var(--faint);background:var(--ground);
+    border-radius:999px;padding:3px 9px;font-variant-numeric:tabular-nums}
+  .pedit{display:flex;gap:8px;padding:2px 10px 12px 30px;animation:enter .25s ease}
+  .pedit input{flex:1;border:1px solid var(--hair2);border-radius:9px;padding:8px 12px;min-width:0;
+    font-family:var(--sans);font-size:12.5px;color:var(--ink);outline:none;transition:border-color .2s}
+  .pedit input:focus{border-color:var(--area,#2563EB)}
+  .pempty{padding:24px;text-align:center;color:var(--faint);font-size:13px}
+  .pnote{display:flex;gap:8px;align-items:center;padding:11px 12px 3px;font-size:12px;
+    font-weight:600;color:var(--violet)}
+  .pnote svg{flex:none}
+  @media(max-width:600px){.pbox{margin:8vh 14px 0}}
+
+  /* ---- morning review wizard (full screen) ---- */
+  #morning{position:fixed;inset:0;z-index:70;display:none;background:var(--ground);
+    overflow-y:auto;transition:opacity .25s ease}
+  #morning.open{display:block;animation:fadeIn .3s ease}
+  .mwrap{max-width:640px;margin:0 auto;padding:48px 20px 60px;
+    animation:enter .45s cubic-bezier(.2,.7,.2,1)}
+  .mhead{display:flex;align-items:center;gap:11px;margin-bottom:18px}
+  .mtitle{font-size:20px;font-weight:700;letter-spacing:-.02em}
+  .mbody{background:var(--card);border:1px solid var(--hair);border-radius:20px;
+    padding:10px 24px 18px;box-shadow:var(--shadow)}
+  .mdots{display:inline-flex;gap:4px;margin-left:10px;align-self:center}
+  .mdots i{width:6px;height:6px;border-radius:50%;background:var(--hair2);transition:background .3s}
+  .mdots i.on{background:var(--ink)}
+  .sugrow{display:flex;align-items:center;gap:12px;padding:12px 2px;border-bottom:1px solid var(--hair)}
+  .sugrow:last-of-type{border-bottom:none}
+  .sugrow .sugtxt{flex:1;min-width:0;font-size:13.5px;font-weight:500}
+  .sugrow .sugtxt .why{display:block;font-size:11px;font-weight:400;color:var(--faint);margin-top:2px}
+  .statechip{font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;
+    border-radius:5px;padding:3px 9px;flex:none;animation:pop .35s cubic-bezier(.3,1.6,.5,1)}
+  .mprim{width:100%;margin:12px 0 8px;padding:12px;background:var(--ink);color:#fff;border:none;
+    border-radius:12px;font-family:var(--sans);font-size:13px;font-weight:600;cursor:pointer;
+    transition:opacity .2s,transform .12s}
+  .mprim:hover{opacity:.92;transform:translateY(-1px)}
+  .mprim:active{transform:scale(.98)}
+
+  /* ---- key gate (auth overlay — D15: one key, kept in this browser) ---- */
+  #gate{position:fixed;inset:0;z-index:90;display:none;background:var(--ground)}
+  #gate.open{display:flex;align-items:center;justify-content:center;animation:fadeIn .3s ease}
+  .gbox{background:var(--card);border:1px solid var(--hair);border-radius:20px;
+    box-shadow:var(--shadow-lift);padding:28px 30px;width:min(400px,88vw);
+    display:flex;flex-direction:column;gap:12px}
+  .gtitle{display:flex;align-items:center;gap:10px;font-size:18px;font-weight:700}
+  .gtitle .beacon{background:#2563EB}
+  .gtitle .beacon::after{border-color:#2563EB}
+  .gsub{margin:0;color:var(--sub);font-size:13px;line-height:1.5}
+  .gerr{color:var(--amber);font-size:12px;min-height:14px}
+  #gate .snote{background:var(--ground)}
+  .promoted-tag.woke{color:var(--green);background:var(--green-bg)}
+
+  /* ---- toast & foot ---- */
+  #toast{position:sticky;bottom:22px;margin:40px auto 0;width:fit-content;max-width:90%;
+    background:var(--ink);border-radius:999px;color:#fff;
+    font-size:13px;font-weight:500;padding:10px 22px;opacity:0;transform:translateY(8px);
+    transition:opacity .3s,transform .3s;pointer-events:none;text-align:center;
+    box-shadow:var(--shadow-lift)}
+  #toast.show{opacity:1;transform:none}
+  #toast b{color:#7DD3A8;font-weight:700}
+  #toast .tundo{opacity:.62;font-weight:400}
+  .foot{margin-top:46px;display:flex;justify-content:space-between;gap:14px;color:var(--faint);
+    font-size:11.5px;line-height:1.6;flex-wrap:wrap}
+  .foot .kbd{font-family:var(--mono);font-size:10px;border:1px solid var(--hair2);border-radius:4px;
+    padding:1px 5px;background:#fff}
+  .foot b{font-family:var(--mono);font-weight:600;color:var(--sub)}
+
+  .pop{animation:pop .4s cubic-bezier(.3,1.6,.5,1);display:inline-block}
+  @keyframes pop{0%{transform:scale(1)}40%{transform:scale(1.35)}100%{transform:scale(1)}}
+
+  @media(max-width:520px){
+    .title{font-size:21px}.card{padding:20px}.btn .kbd{display:none}
+    .watch{gap:12px;font-size:11.5px}
+  }
+  @media(prefers-reduced-motion:reduce){
+    *,*::before,*::after{animation-duration:.01ms !important;animation-delay:0s !important;transition-duration:.01ms !important}
+  }
+</style>
+
+<div class="wrap">
+  <header class="mast rise d1 hideable h-up zone">
+    <div class="wordmark"><span>⌖</span> Helm</div>
+    <div class="watch"><span id="clock">–:–</span><span><b id="streak">6</b>-day streak</span>
+      <button class="daybtn" onclick="toggleDay()" title="See today's timeline"><b id="doneN">4</b> done today</button>
+      <button class="iconbtn" onclick="openOmni()" title="Search or capture (⌘K)" aria-label="Search or capture">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.8-3.8"/></svg>
+      </button>
+      <button class="ebtn" id="ebtn" onclick="cycleEnergy()"
+        title="Energy — click or press E to cycle" aria-label="Energy level"></button></div>
+  </header>
+  <p class="greet rise d1 hideable h-up zone" id="greet">One thing at a time.</p>
+
+  <div class="thread rise d2 hideable h-up zone" aria-hidden="true">
+    <span class="tlabel" id="tStart" style="left:0%">08:00</span>
+    <span class="tlabel" id="tEnd" style="left:100%">17:00</span>
+    <div class="rail"></div>
+    <div class="burn" id="burn" style="width:0%"></div>
+    <div id="tmarks"></div>
+    <div class="now-dot" id="nowDot" style="left:0%"></div>
+    <div id="draghint"></div>
+    <div id="dragslot"></div>
+  </div>
+
+  <div id="stage" class="rise d3"></div>
+  <div id="upcoming" class="hideable h-down zone"></div>
+
+  <div class="rise d5 hideable h-down zone">
+    <div class="chips" id="chips"></div>
+  </div>
+
+  <div id="daySec" class="hideable h-down zone">
+    <div class="label" style="margin-top:34px">Today so far <span class="rule"></span></div>
+    <div class="dbox" id="dayBody"></div>
+  </div>
+
+  <div id="morning" role="dialog" aria-label="Morning review">
+    <div class="mwrap">
+      <div class="mhead"><span class="beacon"></span><span class="mtitle">Morning review</span>
+        <span class="mdots" id="mdots"></span>
+        <button class="mini" style="margin-left:auto" onclick="morningFinish()">Skip</button></div>
+      <div class="mbody" id="mbody"></div>
+    </div>
+  </div>
+
+  <div id="palette" role="dialog" aria-label="Search or capture">
+    <div class="pback" onclick="closeOmni()"></div>
+    <div class="pbox">
+      <div class="pinput">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.8-3.8"/></svg>
+        <input id="capIn" type="text" placeholder="Search, ask, or dump a task…"
+          oninput="renderOmni()" onkeydown="omniKey(event)" aria-label="Search or capture a task">
+        <button class="capgo" id="capGo" onclick="submitCapture()">Capture</button>
+        <span class="pkbd">esc</span>
+      </div>
+      <div class="plist" id="capRes"></div>
+    </div>
+  </div>
+
+  <div id="gate" role="dialog" aria-label="Unlock Helm">
+    <div class="gbox">
+      <div class="gtitle"><span class="beacon"></span> Helm</div>
+      <p class="gsub">The glass needs its key to read anything. It stays in this browser only — never in a URL.</p>
+      <div id="gurl"></div>
+      <input id="gkey" class="snote" type="password" placeholder="HELM_API_KEY"
+        onkeydown="if(event.key==='Enter')gateGo()" aria-label="API key">
+      <div class="gerr" id="gerr"></div>
+      <button class="mprim" style="margin:0" onclick="gateGo()">Unlock</button>
+    </div>
+  </div>
+
+  <div id="toast" role="status"></div>
+
+  <footer class="foot rise d5 hideable h-down zone">
+    <span><span class="kbd">D</span> done &nbsp;<span class="kbd">U</span> done + follow-up &nbsp;<span class="kbd">S</span> snooze &nbsp;<span class="kbd">W</span> swap &nbsp;<span class="kbd">F</span> focus &nbsp;<span class="kbd">E</span> energy &nbsp;<span class="kbd">⌘K</span> search + capture</span>
+    <span>Live — <b>queries:brief</b> paints the page by push; verbs write straight back</span>
+  </footer>
+</div>
+
+<script type="module">
+/* Helm — the glass, WIRED (slice 4.8).
+   Live ConvexClient subscriptions + keyed writes replace the sample data.
+   Server behaviours are rendered, never reimplemented (docs/04-functions-and-api.md): the waker
+   returns parked tasks to Now, the cron promotes meeting prep at T-30 — the
+   glass just paints the push. AI passes (enrich/polish/NL-search) degrade
+   gracefully while ANTHROPIC_API_KEY is unset. */
+import { ConvexClient } from "https://esm.sh/convex@1.42.0/browser";
+
+/* ═══ utilities ═══ */
+const $=s=>document.querySelector(s);
+const esc=s=>String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+const DAY=86400000,MIN=60000;
+const hhmm=d=>d.toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});
+const mmss=s=>`${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`;
+const fmtMin=x=>{const v=((x%1440)+1440)%1440;
+ return String(Math.floor(v/60)).padStart(2,'0')+':'+String(v%60).padStart(2,'0');};
+const fmtDur=ms=>{const s=Math.max(0,Math.round(ms/1000));if(s<60)return s+'s';
+ const m=Math.round(s/60);if(m<90)return m+'m';
+ const h=Math.floor(m/60);return m%60?`${h}h ${m%60}m`:`${h}h`;};
+const fmtAge=ms=>{if(ms<0)ms=0;const d=Math.floor(ms/DAY);if(d>=1)return d+'d';
+ const h=Math.floor(ms/3600000);if(h>=1)return h+'h';return Math.max(1,Math.round(ms/MIN))+'m';};
+const sameLocalDay=(a,b)=>a.toDateString()===b.toDateString();
+const fmtWake=ts=>{const d=new Date(ts);return sameLocalDay(d,new Date())?hhmm(d)
+ :d.toLocaleDateString('en-GB',{weekday:'short'})+' '+hhmm(d);};
+const color=t=>(t&&t.area&&t.area.color)||'#64748B';
+const tintHex=c=>`color-mix(in srgb, ${c} 12%, white)`;
+const isParked=(t,now)=>t.snoozeUntil!==undefined&&t.snoozeUntil>(now??Date.now());
+const wDays=t=>Math.floor((Date.now()-(t.waitingSince??t.updatedAt))/DAY);
+const sizeEff={xs:'low',m:'steady',l:'deep'};
+const effOf=t=>sizeEff[t.size]||'steady';
+const normEnergy=e=>({low:'low',light:'low',steady:'steady',deep:'deep'})[e]||'steady';
+const localMinutes=ts=>{const d=new Date(ts);let m=d.getHours()*60+d.getMinutes();
+ if(d.getHours()<4)m+=1440;return m;};
+// Helm's day is Europe/London (convex/lib/time.ts) — never the browser's TZ.
+const LDN=new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/London'});
+const londonDay=ts=>LDN.format(new Date(ts));
+/* innerHTML only when the content actually changed — a push burst must not
+   destroy scroll position, hover state, or a button mid-click. */
+function setHTML(el,html){
+ if(el._html===html)return false;
+ el._html=html;el.innerHTML=html;return true;
+}
+
+const icons={
+ pin:'<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 21s-7-5.1-7-11a7 7 0 1 1 14 0c0 5.9-7 11-7 11z"/><circle cx="12" cy="10" r="2.5"/></svg>',
+ link:'<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M10 14a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1.5 1.5"/><path d="M14 10a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7L12.5 18.5"/></svg>',
+ check:'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12.5 9.5 18 20 6.5"/></svg>',
+ moon:'<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M20 14A8.5 8.5 0 1 1 10 4a7 7 0 0 0 10 10z"/></svg>',
+ swap:'<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 3l4 4-4 4"/><path d="M20 7H7"/><path d="M8 21l-4-4 4-4"/><path d="M4 17h13"/></svg>',
+ play:'<svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M7 4.5v15l13-7.5z"/></svg>',
+ spark:'<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"/></svg>',
+ cal:'<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M8 3v4M16 3v4M3 10h18"/></svg>',
+ bulb:'<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-4 10.5c.7.6 1 1.4 1 2.5h6c0-1.1.3-1.9 1-2.5A6 6 0 0 0 12 3z"/></svg>'
+};
+
+/* ═══ state ═══ */
+// S = raw subscription payloads; L = the local mirror verbs animate against
+// (rebuilt on every brief push). `hidden` bridges the optimistic gap between
+// a verb's animation and the server push that makes it true.
+const S={brief:null,newToday:[],dayLog:null,inbox:[],open:[],someday:[],areas:[]};
+const L={today:[]};
+const hidden=new Map();
+const hide=id=>hidden.set(id,Date.now());
+const shown=arr=>(arr||[]).filter(t=>!hidden.has(t._id));
+const stage=$('#stage'), chipsEl=$('#chips');
+let client=null,API_KEY=localStorage.getItem('helm:apiKey')||'';
+let busy=false,pending=false,snoozeOpen=false,kickOpen=false;
+let openDrawer=null,dayOpen=false,dayClosed=null,allFilter='all',delegatingId=null,upListOpen=false,lastUndo=null;
+let pairA=null,pairB=null; // merge/connect picker (5.3)
+const linkCache=new Map(); // link siblings not in any live payload (e.g. done) — fetched once
+let energy='steady',energySetAt=0,eveningStartUI=null,lastPickId=null,cardSig='';
+const FOCUS_TOTAL=25*60;let focusLeft=0,focusTimer=null;
+let threadS=8*60,threadE=17*60,threadNow=8*60;
+let panelTimer=null,panelHover=false,drag=null,capTimer=null;
+let sres=[],editRef=null,omniIntent=false;
+const subs=[];
+
+function cur(){return L.today[0]||null;}
+function taskById(id){
+ for(const arr of [L.today,S.open,S.someday,S.inbox,S.newToday,
+  (S.brief?S.brief.waiting:[]),(S.brief?S.brief.wins:[]),
+  (S.brief?S.brief.upcoming:[]),(S.brief?S.brief.ageing:[])]){
+  const t=(arr||[]).find(x=>x._id===id);if(t)return t;
+ }
+ return null;
+}
+function areaColorFor(key){
+ const a=S.areas.find(x=>x.key===key);return a?a.color:'#64748B';
+}
+
+/* ═══ connection + key gate (D15: apiKey on every call, stored once) ═══ */
+function deriveUrl(){
+ const o=localStorage.getItem('helm:convexUrl');if(o)return o;
+ if(location.origin.includes('.convex.site'))
+  return location.origin.replace('.convex.site','.convex.cloud');
+ return null;
+}
+function gateOpen(){return $('#gate').classList.contains('open');}
+function showGate(needUrl,msg){
+ $('#gurl').innerHTML=needUrl
+  ?`<input id="gu" class="snote" type="text" placeholder="Convex deployment URL (https://….convex.cloud)"
+     value="${esc(localStorage.getItem('helm:convexUrl')||'')}">`:'';
+ $('#gerr').textContent=msg||'';
+ $('#gate').classList.add('open');
+ setTimeout(()=>{const k=$('#gkey');if(k)k.focus();},60);
+}
+async function gateGo(){
+ const u=$('#gu');if(u&&u.value.trim())localStorage.setItem('helm:convexUrl',u.value.trim());
+ // Empty field + a stored key = retry (e.g. after a network blip) — the key
+ // is only ever wiped when the server actually rejects it.
+ const k=$('#gkey').value.trim()||API_KEY;
+ if(!k){$('#gerr').textContent='The key can’t be empty.';return;}
+ API_KEY=k;localStorage.setItem('helm:apiKey',k);
+ $('#gerr').textContent='Checking…';
+ await tryBoot();
+}
+async function tryBoot(){
+ const url=deriveUrl();
+ if(!url){showGate(true,'');return;}
+ if(!API_KEY){showGate(false,'');return;}
+ if(client){try{await client.close();}catch(e){}client=null;}
+ try{client=new ConvexClient(url);}
+ catch(e){ // malformed stored URL must not break every future boot
+  client=null;localStorage.removeItem('helm:convexUrl');
+  showGate(true,'That URL doesn’t look right — full https://… address, please.');
+  return;
+ }
+ try{await client.query('queries:brief',{apiKey:API_KEY});}
+ catch(e){
+  try{await client.close();}catch(e2){}client=null;
+  const rejected=isAuthErr(e);
+  if(rejected)localStorage.removeItem('helm:apiKey'); // network blips keep the key
+  showGate(!deriveUrl(),rejected
+   ?'That key didn’t unlock it — check and try again.'
+   :'Couldn’t reach the deployment — check the connection, then Unlock to retry.');
+  return;
+ }
+ $('#gate').classList.remove('open');
+ $('#gkey').value='';
+ subscribeAll();
+}
+/* Prod redacts ConvexError MESSAGES to "Server Error" but preserves .data —
+   check both, or a rotated key would never re-open the gate on prod. */
+function isAuthErr(e){
+ if(/unauthorized/i.test(String(e)))return true;
+ return !!(e&&typeof e.data==='string'&&/unauthorized/i.test(e.data));
+}
+function regate(){
+ if(gateOpen())return;
+ localStorage.removeItem('helm:apiKey');API_KEY='';
+ showGate(false,'The key was rejected — enter it again.');
+}
+async function call(kind,name,args){
+ try{return await client[kind](name,{apiKey:API_KEY,...args});}
+ catch(e){
+  if(isAuthErr(e))regate();
+  else if(kind==='mutation')toast('<b>Didn’t stick.</b> Check the connection and try again.');
+  throw e;
+ }
+}
+const mut=(n,a={})=>call('mutation',n,a);
+const act=(n,a={})=>call('action',n,a);
+const qry=(n,a={})=>call('query',n,a);
+const onErr=e=>{if(isAuthErr(e))regate();};
+
+function subscribeAll(){
+ while(subs.length){try{subs.pop()();}catch(e){}}
+ const sub=(name,args,cb)=>subs.push(client.onUpdate(name,{apiKey:API_KEY,...args},cb,onErr));
+ // brief hydrates the whole resting page in one subscription (4.4).
+ sub('queries:brief',{},b=>{S.brief=b;
+  if(Date.now()-energySetAt>5000)energy=normEnergy(b.energy);
+  renderEnergy();rebuild();maybeMorning();});
+ sub('queries:newToday',{},r=>{S.newToday=r;render();});
+ sub('queries:dayLog',{},d=>{
+  const prev=S.dayLog?S.dayLog.counts.total:undefined;
+  S.dayLog=d;
+  if(prev!==undefined&&d.counts.total>prev)bump('#doneN',d.counts.total);
+  render();});
+ sub('queries:inbox',{},r=>{S.inbox=r;render();});
+ sub('queries:list',{includeSnoozed:true,limit:200},r=>{S.open=r;render();});
+ sub('queries:list',{status:'someday',limit:100},r=>{S.someday=r;render();});
+ qry('areas:listAreas').then(a=>{S.areas=a;}).catch(()=>{});
+}
+
+/* ═══ render pipeline ═══ */
+function rebuild(){
+ const b=S.brief;if(!b)return;
+ for(const [id,ts] of hidden)if(Date.now()-ts>12000)hidden.delete(id);
+ L.today=shown(b.today);
+ // "Back as promised" / prep-promoted: the SERVER changed the pick — say why.
+ const p=cur();
+ if(p&&p._id!==lastPickId&&lastPickId!==null&&!busy){
+  if(p.wokeAt&&Date.now()-p.wokeAt<2*MIN)
+   toast(`<b>Back as promised.</b> ${esc(p.title)}`);
+  else{
+   const mp=prepMeetingFor(p);
+   if(mp)toast(`<b>${esc(mp.title)} in ${Math.max(0,Math.round((mp.startAt-Date.now())/MIN))} min</b> — prep promoted.`);
+  }
+ }
+ lastPickId=p?p._id:null;
+ render();
+}
+function render(){
+ if(drag&&drag.active){pending=true;return;}
+ renderHeader();
+ renderUpcoming();
+ renderThreadEvents();
+ renderChips();
+ if(openDrawer){if(!delegatingId)renderDrawer();}
+ else if(!busy)renderCardIfChanged();
+ if(dayOpen)renderDay();
+}
+function finishBusy(){busy=false;if(pending){pending=false;render();}}
+function renderHeader(){
+ if(S.brief)$('#streak').textContent=S.brief.streak;
+ if(S.dayLog)$('#doneN').textContent=S.dayLog.counts.total;
+}
+function setAreaColor(c){
+ stage.style.setProperty('--area',c);
+ stage.style.setProperty('--area-bg',tintHex(c));
+ document.querySelector('.wordmark span').style.color=c;
+ $('#burn').style.background=c;
+ $('#nowDot').style.background=c;
+}
+function ringSVG(on){return `<svg class="ring ${on?'on':''}" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M7.5 12.5 10.8 16 16.5 8.5"/></svg>`;}
+function noteActivity(){
+ const now=new Date();
+ let m=now.getHours()*60+now.getMinutes();
+ if(now.getHours()<4)m+=1440;
+ if(m>=17*60&&eveningStartUI===null){eveningStartUI=m;tickTime();}
+}
+function toast(msg,ms){const t=$('#toast');t.innerHTML=msg;t.classList.add('show');
+ clearTimeout(t._h);t._h=setTimeout(()=>t.classList.remove('show'),ms||2800);
+ noteActivity();}
+function bump(id,n){const el=$(id);el.textContent=n;el.classList.remove('pop');void el.offsetWidth;el.classList.add('pop');}
+function burst(){
+ const card=$('#card');if(!card)return;
+ const r=card.getBoundingClientRect();
+ const c=cur()?color(cur()):'#2563EB';
+ const cols=[c,'#16A34A','#F59E0B',c];
+ for(let i=0;i<14;i++){
+  const s=document.createElement('div');s.className='spark';
+  s.style.background=cols[i%cols.length];
+  s.style.left=(r.width*0.5)+'px'; s.style.top='58%';
+  const ang=Math.random()*Math.PI*2, dist=40+Math.random()*70;
+  s.style.setProperty('--dx',Math.cos(ang)*dist+'px');
+  s.style.setProperty('--dy',Math.sin(ang)*dist-30+'px');
+  card.appendChild(s);
+  setTimeout(()=>s.remove(),850);
+ }
+}
+
+/* ═══ focus timer ═══ */
+function enterFocusMode(){
+ document.body.classList.add('focusing');
+ if(stage&&stage.scrollIntoView)stage.scrollIntoView({behavior:'smooth',block:'center'});
+}
+function exitFocusMode(){document.body.classList.remove('focusing');}
+function stopFocus(){
+ if(focusTimer){clearInterval(focusTimer);focusTimer=null;}
+ focusLeft=0;exitFocusMode();
+ const c=$('#card');if(c)c.classList.remove('timer-on');
+}
+function startFocus(){
+ if(openDrawer){toggleDrawer(openDrawer);return;}
+ if(busy||!cur())return;
+ if(focusTimer){stopFocus();renderFocusRow();const b=$('#fbar');if(b)b.style.width='0';
+  toast('Focus stopped. The world comes back.');return;}
+ focusLeft=FOCUS_TOTAL;
+ mut('tasks:start',{id:cur()._id}).catch(()=>{}); // first-engagement stamp (H4/D14)
+ enterFocusMode();
+ const c=$('#card');if(c)c.classList.add('timer-on');
+ focusTimer=setInterval(()=>{
+  focusLeft--;
+  const btn=$('#focusBtn'),bar=$('#fbar');
+  if(btn)btn.innerHTML=`${icons.play} ${mmss(focusLeft)} · stop`;
+  if(bar)bar.style.width=(100*(FOCUS_TOTAL-focusLeft)/FOCUS_TOTAL)+'%';
+  if(focusLeft<=0){stopFocus();showTimesUp();}
+ },1000);
+ renderFocusRow();
+ toast('<b>25 on the clock.</b> Everything else can wait — literally.');
+}
+function renderFocusRow(){
+ const btn=$('#focusBtn');if(!btn)return;
+ if(focusTimer){btn.classList.add('running');btn.innerHTML=`${icons.play} ${mmss(focusLeft)} · stop`;}
+ else{btn.classList.remove('running');btn.innerHTML=`${icons.play} Focus 25 min <span class="kbd">F</span>`;}
+}
+function showTimesUp(){
+ const fr=$('#frow');if(!fr)return;
+ const div=document.createElement('div');div.className='timesup';
+ div.innerHTML=`Time's up — how did it go?
+  <button class="mini yes" onclick="doDone()" style="margin-left:auto">Done</button>
+  <button class="mini" onclick="this.parentElement.remove();startFocus()">Keep going</button>
+  <button class="mini" onclick="doSwap()">Swap</button>`;
+ fr.parentElement.insertBefore(div,fr);
+ renderFocusRow();const b=$('#fbar');if(b)b.style.width='0';
+}
+
+/* ═══ kickoff ═══ */
+function kickTextFor(t){
+ return t.kickoffPrompt||`Pick this up: ${t.title}. ${t.contextLine||''} Gather the context and prep the next action for the user.`;
+}
+function toggleKickoff(){
+ const k=$('#kick');if(!k)return;
+ kickOpen=!kickOpen;k.classList.toggle('open',kickOpen);
+}
+function startSession(){
+ copyKick();
+ toggleKickoff();
+}
+function copyKick(){
+ const t=cur();if(!t)return;
+ if(navigator.clipboard)navigator.clipboard.writeText(kickTextFor(t));
+ toast('<b>Kickoff copied.</b> Paste into Claude Code — Helm will log the outcome.');
+}
+
+/* ═══ now card ═══ */
+function prepMeetingFor(t){
+ if(!t||!S.brief)return null;
+ const now=Date.now();
+ // The cron's own stamp (prepPromotedAt) says whether promotion happened —
+ // never re-derive the T-30 window client-side (it can drift from PREP_LEAD_MS).
+ return (S.brief.meetings||[]).find(m=>m.prepTaskId===t._id
+  &&m.prepPromotedAt!==undefined&&m.startAt>now-5*MIN)||null;
+}
+function cardTags(t){
+ let h='';
+ if(prepMeetingFor(t))h+='<span class="promoted-tag">meeting prep</span>';
+ if(t.wokeAt&&Date.now()-t.wokeAt<5*MIN)h+='<span class="promoted-tag woke">back as promised</span>';
+ return h;
+}
+/* Linked siblings (connect, 5.3). Resolve from the payloads the glass already
+   holds; anything missing (a done sibling, someone else's drawer) is fetched
+   once into linkCache — the re-render paints it when it lands. */
+function linkSib(id){return taskById(id)||linkCache.get(id)||null;}
+function clusterHTML(t){
+ const ids=t.links||[];
+ if(!ids.length)return '';
+ const chips=ids.map(id=>{
+  const s=linkSib(id);
+  if(!s&&!linkCache.has(id)){
+   linkCache.set(id,null); // in flight — one fetch per id, ever
+   qry('tasks:get',{id}).then(doc=>{if(doc){linkCache.set(id,doc);renderCardIfChanged();}}).catch(()=>{});
+  }
+  if(!s)return `<span class="lchip gone">…</span>`;
+  const closed=s.status==='done'||s.status==='dropped';
+  return `<button class="lchip ${closed?'gone':''}" onclick="jumpLinked('${id}')">
+   <span class="fdot" style="background:${color(s)}"></span>${esc(s.title)}${closed?` · ${s.status}`:''}</button>`;
+ }).join('');
+ return `<div class="cluster"><span class="clabel">${icons.link} linked</span>${chips}</div>`;
+}
+function jumpLinked(id){
+ const s=linkSib(id);
+ if(s&&(s.status==='done'||s.status==='dropped')){toast(`<b>${esc(s.title)}</b> — already ${s.status}.`);return;}
+ pullNow(id,'<b>Across the cluster.</b> Linked task up now.');
+}
+function cardSigFor(t){
+ return t?[t._id,t.title,t.contextLine||t.note||'',t.kickoffPrompt||'',
+  t.sourceRef?t.sourceRef.url||'':'',cardTags(t),
+  (t.links||[]).map(id=>{const s=linkSib(id);return s?s.title+(s.status||''):'?';}).join(',')
+ ].join('|'):(S.brief?'empty':'boot');
+}
+function renderCardIfChanged(){
+ if(snoozeOpen||focusTimer)return; // never yank the card mid-interaction
+ const sig=cardSigFor(cur());
+ if(sig===cardSig)return;
+ renderCard('');
+}
+function renderCard(cls){
+ snoozeOpen=false;kickOpen=false;stopFocus();
+ stage._html=null; // direct innerHTML below — invalidate the setHTML cache
+ const t=cur();
+ cardSig=cardSigFor(t);
+ if(!t){
+  setAreaColor('#64748B');
+  const seeded=S.brief!==null;
+  stage.innerHTML=`<div class="card enter" style="min-height:300px"><div class="clear">
+   <div class="beacon" style="width:10px;height:10px"></div>
+   <div class="big">${seeded?'All clear.':'Waking the glass…'}</div>
+   <div class="sub">${seeded
+    ?'Nothing needs you right now. The sweep is watching — anything new lands here first.'
+    :'Connecting to the brain. One moment.'}</div>
+  </div></div>`;return;}
+ setAreaColor(color(t));
+ const ctx=t.contextLine||t.note||`Open ${fmtAge(Date.now()-t._creationTime)} · filed in ${t.area.label}.`;
+ const srcUrl=t.sourceRef?t.sourceRef.url:null;
+ const srcLabel=(t.sourceRef&&t.sourceRef.label)||(srcUrl?'Open the source':null);
+ stage.innerHTML=`<div class="card ${cls||''}" id="card">
+  <div class="eyebrow"><span class="beacon"></span><span class="rightnow">Right now</span>
+   ${cardTags(t)}
+   <span class="area-chip">${esc(t.area.key)}</span></div>
+  <div><h1 class="title">${esc(t.title)}<span class="strike"></span></h1></div>
+  <div class="ctx">${icons.pin}<span>${esc(ctx)}</span></div>
+  ${srcLabel?`<a class="src" ${srcUrl?`href="${esc(srcUrl)}" target="_blank" rel="noopener"`:`href="#" onclick="toast('No link stored for this one.');return false"`}>${icons.link} ${esc(srcLabel)}</a>`:''}
+  ${clusterHTML(t)}
+  <div class="frow" id="frow">
+   <button class="btn" id="focusBtn" onclick="startFocus()">${icons.play} Focus 25 min <span class="kbd">F</span></button>
+   <button class="btn" onclick="toggleKickoff()">${icons.spark} Hand to Claude</button>
+  </div>
+  <div class="kick" id="kick"><div class="kbox">
+   <div class="klabel">Kickoff prompt${t.kickoffPrompt?'':' · drafted just now'}</div>
+   <div class="ktext">${esc(kickTextFor(t))}</div>
+   <div class="kacts">
+    <button class="mini go" onclick="startSession()">Copy &amp; start ↗</button>
+    <button class="mini" onclick="copyKick()">Copy</button>
+   </div></div></div>
+  <div class="acts" id="acts">
+   <button class="btn done-btn" onclick="doDone()">${icons.check} Done <span class="kbd">D</span></button>
+   <button class="btn" onclick="toggleSnooze()">${icons.moon} Snooze <span class="kbd">S</span></button>
+   <button class="btn" onclick="doSwap()">${icons.swap} Swap <span class="kbd">W</span></button>
+   <button class="btn" onclick="cardDelegate()"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/></svg> Delegate <span class="kbd">G</span></button>
+  </div>
+  <div class="fbar" id="fbar"></div></div>`;
+}
+
+/* ═══ chips + drawers (the stage system) ═══ */
+function outstanding(){return shown(S.open).length+shown(S.someday).length;}
+/* Ageing is the SERVER's call (brief.ageing, WAITING_AGEING_DAYS) — the glass
+   colours by membership, never by re-deriving a threshold that can drift. */
+function ageingIds(){return new Set((S.brief?S.brief.ageing:[]).map(t=>t._id));}
+function renderChips(){
+ const b=S.brief;
+ if(!b){setHTML(chipsEl,'');return;}
+ const hot=ageingIds();
+ const waitHot=(b.waiting||[]).some(w=>hot.has(w._id));
+ const t3d=S.dayLog?S.dayLog.completedPlanned.length:0;
+ const t3t=t3d+L.today.length;
+ const inboxN=shown(S.inbox).length;
+ setHTML(chipsEl,`
+  <button class="chip ${openDrawer==='today'?'open':''}" onclick="toggleDrawer('today')">Today <b>${t3d}/${t3t}</b></button>
+  <button class="chip ${waitHot?'attn-amber':''} ${openDrawer==='waiting'?'open':''}" onclick="toggleDrawer('waiting')">Waiting on <b>${b.counts.waiting}</b></button>
+  <button class="chip ${inboxN?'attn-violet':''} ${openDrawer==='inbox'?'open':''}" onclick="toggleDrawer('inbox')"><b>${inboxN}</b> to confirm</button>
+  <button class="chip ${openDrawer==='wins'?'open':''}" onclick="toggleDrawer('wins')"><b>${shown(b.wins).length}</b> quick wins</button>
+  <button class="chip ${openDrawer==='newday'?'open':''}" onclick="toggleDrawer('newday')">New today <b>${S.newToday.length}</b></button>
+  <button class="chip ${openDrawer==='all'?'open':''}" onclick="toggleDrawer('all')">Everything <b>${outstanding()}</b></button>`);
+}
+function srcBadge(source){
+ const s=String(source||'').toLowerCase();
+ if(s.includes('granola'))return '<span class="from f-granola">granola</span>';
+ if(s.includes('mail'))return '<span class="from f-email">email</span>';
+ const short=esc(s.split(/[:·\s]/)[0]||'sweep');
+ return `<span class="from" style="background:var(--faint)">${short}</span>`;
+}
+function ageChip(t){
+ if(!S.brief)return '';
+ const hot=(S.brief.ageing||[]).some(a=>a._id===t._id);
+ return hot?`<span class="age">${fmtAge(Date.now()-(t.waitingSince??t.updatedAt))}</span>`:'';
+}
+function delegateUI(t){
+ if(delegatingId===t._id)
+  return `<input class="snote" id="dwho" style="max-width:150px" placeholder="Hand to whom?"
+    onkeydown="if(event.key==='Enter')goDelegate('${t._id}');else if(event.key==='Escape')cancelDelegate()">
+   <button class="mini yes" onclick="goDelegate('${t._id}')">Go</button>`;
+ return `<button class="mini" onclick="askDelegate('${t._id}')">Delegate</button>`;
+}
+
+/* ═══ merge + connect picker (5.3, docs/03-data-model.md) ═══
+   Pair on a row → pick the other task → choose: Connect (related, both stay)
+   or Merge (same thing → one task; the OLDER keeps the original added-date
+   by default, flippable). Dupes collapse; clusters emerge. */
+function pairUI(t){
+ const badge=t.links&&t.links.length?`<span class="meta">${icons.link}${t.links.length}</span>`:'';
+ if(pairA===t._id)return `${badge}<button class="mini" onclick="cancelPair()">picking…</button>`;
+ if(pairA)return `${badge}<button class="mini yes" onclick="pickPair('${t._id}')">Pair</button>`;
+ return `${badge}<button class="mini" onclick="startPair('${t._id}')" title="Merge or connect with another task">${icons.link}</button>`;
+}
+function pairBanner(){
+ if(!pairA)return '';
+ const a=taskById(pairA);
+ if(!a){pairA=pairB=null;return '';}
+ if(!pairB)return `<div class="pairbar">${icons.link} <b>${esc(a.title)}</b> — now pick its pair below.
+  <button class="mini" style="margin-left:auto" onclick="cancelPair()">Cancel</button></div>`;
+ const b=taskById(pairB);
+ if(!b){pairB=null;return pairBanner();}
+ const older=a._creationTime<=b._creationTime?a:b;
+ const newer=older===a?b:a;
+ const short=s=>esc(s.length>34?s.slice(0,33)+'…':s);
+ return `<div class="pairbar"><b>${short(a.title)}</b> + <b>${short(b.title)}</b> —
+  <button class="mini yes" onclick="connectPair()">Connect · related, both stay</button>
+  <button class="mini yes" onclick="mergePair(false)">Merge · keep “${short(older.title)}”</button>
+  <button class="mini" onclick="mergePair(true)" title="Fold the older into the newer instead">keep “${short(newer.title)}”</button>
+  <button class="mini" onclick="cancelPair()">Cancel</button></div>`;
+}
+function startPair(id){pairA=id;pairB=null;renderDrawer();}
+function pickPair(id){if(id===pairA)return;pairB=id;renderDrawer();}
+function cancelPair(){pairA=pairB=null;if(openDrawer)renderDrawer();}
+async function connectPair(){
+ const aId=pairA,bId=pairB;pairA=pairB=null;
+ try{
+  await mut('tasks:connect',{aId,bId});
+  toast('<b>Linked.</b> Related, both live — they travel as a cluster now.');
+ }catch(e){}
+ if(openDrawer)renderDrawer();
+}
+async function mergePair(keepNewer){
+ const a=taskById(pairA),b=taskById(pairB);
+ pairA=pairB=null;
+ if(!a||!b){if(openDrawer)renderDrawer();return;}
+ const older=a._creationTime<=b._creationTime?a:b;
+ const newer=older===a?b:a;
+ const target=keepNewer?newer:older, source=keepNewer?older:newer;
+ try{
+  await mut('tasks:merge',{sourceId:source._id,targetId:target._id});
+  hide(source._id);
+  L.today=L.today.filter(t=>t._id!==source._id);
+  toast(`<b>Merged — one task now.</b> Kept “${esc(target.title)}”; the dupe's context folded in.`);
+ }catch(e){}
+ renderChips();
+ if(openDrawer)renderDrawer();else renderCard();
+}
+function renderDrawer(){
+ if(!openDrawer)return;
+ const now=Date.now();
+ let body='';
+ if(openDrawer==='today'){
+  (S.dayLog?S.dayLog.completedPlanned:[]).forEach(d=>{
+   body+=`<div class="row ticked">${ringSVG(true)}<span class="dot" style="background:${color(d)}"></span><span class="name">${esc(d.title)}</span></div>`;});
+  L.today.forEach(t=>{
+   body+=`<div class="row" data-tid="${t._id}" data-dkind="queue">${ringSVG(false)}<span class="dot" style="background:${color(t)}"></span><span class="name">${esc(t.title)}</span>${ageChip(t)}</div>`;});
+  if(!body)body=`<div class="allhint">Nothing picked for today yet.</div>`;
+ }else if(openDrawer==='waiting'){
+  const hot=ageingIds();
+  body=shown(S.brief?S.brief.waiting:[]).map(w=>`<div class="drow" data-tid="${w._id}" data-dkind="waiting">
+   <span><b style="font-weight:600">${esc(w.waitingOn||'—')}</b> — ${esc(w.title)}</span>
+   <span class="meta ${hot.has(w._id)?'hot':''}">${wDays(w)}d</span></div>`).join('')
+   ||`<div class="allhint">Waiting on no one. Rare air.</div>`;
+ }else if(openDrawer==='inbox'){
+  body=shown(S.inbox).map(x=>`<div class="drow" id="i${x._id}" data-tid="${x._id}" data-dkind="inbox">
+   ${srcBadge(x.source)}<span>${esc(x.title)}</span>
+   <button class="mini yes" onclick="confirmIt('${x._id}')" style="margin-left:auto">Confirm</button>
+   <button class="mini" onclick="dismissIt('${x._id}')">Drop</button></div>`).join('')
+   ||`<div class="allhint">Nothing to confirm — the sweep is quiet.</div>`;
+ }else if(openDrawer==='wins'){
+  body=shown(S.brief?S.brief.wins:[]).map(x=>`<div class="drow" data-tid="${x._id}" data-dkind="win">
+   <span class="dot" style="background:${color(x)}"></span>
+   <span>${esc(x.title)}</span><span class="meta">~2 min</span>
+   ${delegateUI(x)}
+   <button class="mini" onclick="pullNow('${x._id}','<b>Up now.</b> Quick one first.')">Do now</button></div>`).join('')
+   ||`<div class="allhint">No two-minute wins on deck.</div>`;
+ }else if(openDrawer==='newday'){
+  const p=cur();
+  body=shown(S.newToday).map(t=>{
+   const parked=isParked(t,now);
+   const meta=parked?`parked · back ${fmtWake(t.snoozeUntil)}`
+    :`${hhmm(new Date(t._creationTime))} · ${esc(t.source)}${proposed(t)?' · to confirm':''}`;
+   const closed=t.status==='done'||t.status==='dropped';
+   const action=closed?`<span class="meta">${t.status}</span>`
+    :parked||proposed(t)?''
+    :(p&&p._id===t._id)?`<span class="nowtag" style="color:${color(t)}">● NOW</span>`
+    :`<button class="mini" onclick="pullNow('${t._id}')">Now</button>`;
+   return `<div class="drow" ${closed||parked||proposed(t)?'':`data-tid="${t._id}" data-dkind="queue"`}>
+    <span class="dot" style="background:${color(t)}"></span><span>${esc(t.title)}</span>
+    <span class="meta">${meta}</span>${action}</div>`;
+  }).join('')||`<div class="allhint">Nothing new yet today — the sweep is watching.</div>`;
+ }else if(openDrawer==='all'){
+  body=buildAllBody(true);
+ }
+ const PANEL_TITLES={today:"Today's three",waiting:'Waiting on',inbox:'To confirm',
+  wins:'Quick wins',newday:'Added today',all:'Everything Helm holds'};
+ setHTML(stage,`<div class="card panelcard">
+  <div class="eyebrow"><span class="beacon"></span>
+   <span class="rightnow">${PANEL_TITLES[openDrawer]}</span>
+   <button class="mini" style="margin-left:auto" onclick="toggleDrawer(openDrawer)">← Back to now</button></div>
+  <div class="t3 embed">${body}</div></div>`);
+ cardSig='__panel__';
+}
+/* Unconfirmed sweep proposals live behind the to-confirm gate ONLY — they
+   must never be promotable from deck/energy/search before a confirm. */
+const proposed=t=>t.needsReview===true;
+function allGroups(){
+ const now=Date.now();
+ const today=londonDay(now);
+ const open=shown(S.open).filter(t=>!proposed(t));
+ const parked=open.filter(t=>isParked(t,now));
+ const active=open.filter(t=>!isParked(t,now));
+ return {
+  deck:active.filter(t=>t.status!=='waiting'&&t.size!=='xs'),
+  wins:active.filter(t=>t.status!=='waiting'&&t.size==='xs'),
+  waiting:active.filter(t=>t.status==='waiting'),
+  parkedToday:parked.filter(t=>londonDay(t.snoozeUntil)===today),
+  snoozedLater:parked.filter(t=>londonDay(t.snoozeUntil)!==today),
+  someday:shown(S.someday),
+ };
+}
+function buildAllBody(withPills){
+ const g=allGroups();
+ const everything=[...g.deck,...g.wins,...g.waiting,...g.parkedToday,...g.snoozedLater,...g.someday];
+ const areaKeys=[...new Set(everything.map(t=>t.area.key))];
+ const f=t=>allFilter==='all'||t.area.key===allFilter;
+ const pills=`<div class="fpills">
+  <button class="fpill ${allFilter==='all'?'on':''}" onclick="setAllFilter('all')">All ${everything.length}</button>
+  ${areaKeys.map(a=>`<button class="fpill ${allFilter===a?'on':''}" onclick="setAllFilter('${a}')"><span class="fdot" style="background:${areaColorFor(a)}"></span>${esc(a)}</button>`).join('')}</div>`;
+ const p=cur();
+ const row=(t,meta,action,drag)=>`<div class="drow" ${drag||''}>
+  <span class="dot" style="background:${color(t)}"></span><span>${esc(t.title)}</span>
+  <span class="meta">${meta||''}</span>${action||''}</div>`;
+ let html='';
+ const deck=g.deck.filter(f);
+ if(deck.length)html+=`<div class="glabel">On deck <b>${deck.length}</b></div>`+deck.map(t=>
+  (p&&p._id===t._id)
+   ?`<div class="drow" data-tid="${t._id}" data-dkind="queue"><span class="dot" style="background:${color(t)}"></span><span>${esc(t.title)}</span><span style="margin-left:auto;display:flex;gap:8px;align-items:center">${pairUI(t)}<span class="nowtag" style="color:${color(t)}">● NOW</span></span></div>`
+   :row(t,`open ${fmtAge(Date.now()-t._creationTime)}`,
+     `${delegateUI(t)}${pairUI(t)}<button class="mini" onclick="pullNow('${t._id}')">Now</button>`,
+     `data-tid="${t._id}" data-dkind="queue"`)).join('');
+ const w2=g.wins.filter(f);
+ if(w2.length)html+=`<div class="glabel">Quick wins <b>${w2.length}</b></div>`+w2.map(t=>
+  row(t,'~2 min',`${pairUI(t)}<button class="mini" onclick="pullNow('${t._id}','<b>Up now.</b> Quick one first.')">Now</button>`,
+   `data-tid="${t._id}" data-dkind="win"`)).join('');
+ const wa=g.waiting.filter(f);
+ const hot=ageingIds();
+ if(wa.length)html+=`<div class="glabel">Waiting on <b>${wa.length}</b></div>`+wa.map(w=>
+  `<div class="drow" data-tid="${w._id}" data-dkind="waiting">
+   <span class="dot" style="background:${color(w)}"></span>
+   <span><b style="font-weight:600">${esc(w.waitingOn||'—')}</b> — ${esc(w.title)}</span>
+   <span class="meta ${hot.has(w._id)?'hot':''}">${wDays(w)}d</span>${pairUI(w)}</div>`).join('');
+ const pk=g.parkedToday.filter(f);
+ if(pk.length)html+=`<div class="glabel">Parked on the timeline <b>${pk.length}</b></div>`+pk.map(t=>
+  row(t,`back ${fmtWake(t.snoozeUntil)}`,`${pairUI(t)}<button class="mini" onclick="bringNow('${t._id}','<b>Unparked.</b> Up now.')">Now</button>`,
+   `data-tid="${t._id}" data-dkind="queue"`)).join('');
+ const sn=g.snoozedLater.filter(f);
+ if(sn.length)html+=`<div class="glabel">Snoozed <b>${sn.length}</b></div>`+sn.map(t=>
+  row(t,`till ${fmtWake(t.snoozeUntil)}`,`${pairUI(t)}<button class="mini" onclick="bringNow('${t._id}','<b>Woken early.</b> No guilt either way.')">Wake</button>`,
+   `data-tid="${t._id}" data-dkind="queue"`)).join('');
+ const sd=g.someday.filter(f);
+ if(sd.length)html+=`<div class="glabel">Someday <b>${sd.length}</b></div>`+sd.map(t=>
+  row(t,'',`${pairUI(t)}<button class="mini" onclick="pullNow('${t._id}','<b>Promoted.</b> Someday is today.')">Now</button>`,
+   `data-tid="${t._id}" data-dkind="queue"`)).join('');
+ if(!html)html=`<div class="allhint">Nothing in ${esc(allFilter)}. It's handled.</div>`;
+ return (withPills?pills:'')+pairBanner()+`<div class="scrolly">${html}
+  <div class="allhint">Everything Helm is holding, so you don't have to. Now is still the only thing that needs you.</div></div>`;
+}
+function setAllFilter(a){allFilter=a;renderDrawer();}
+function askDelegate(id){delegatingId=id;renderDrawer();
+ setTimeout(()=>{const i=$('#dwho');if(i)i.focus();},50);}
+function cancelDelegate(){delegatingId=null;renderDrawer();}
+async function goDelegate(id){
+ const inp=$('#dwho');
+ const person=inp&&inp.value.trim()?inp.value.trim():undefined;
+ delegatingId=null;
+ try{
+  await mut('tasks:delegate',{taskIds:[id],person});
+  hide(id);
+  L.today=L.today.filter(t=>t._id!==id);
+  toast(`<b>Off your plate.</b> Parked on ${esc(person||'them')} — the handover task is on today.`);
+ }catch(e){}
+ if(openDrawer)renderDrawer();
+ renderChips();
+}
+
+/* ═══ Now-type actions ═══ */
+function pullNow(id,msg){
+ if(busy)return;
+ const t=taskById(id);
+ if(!t){
+  // Not in any payload yet (e.g. Now on a just-captured task before the
+  // push lands) — fire the writes anyway; the push paints the stage.
+  mut('checkins:chooseToday',{taskIds:[id,...L.today.map(x=>x._id)]}).catch(()=>{});
+  mut('tasks:start',{id}).catch(()=>{});
+  toast(msg||'<b>Up now.</b>');
+  return;
+ }
+ const p=cur();
+ if(p&&p._id===id){toast('Already up — that IS the one thing.');return;}
+ mut('checkins:chooseToday',{taskIds:[id,...L.today.map(x=>x._id).filter(x=>x!==id)]}).catch(()=>{});
+ mut('tasks:start',{id}).catch(()=>{});
+ L.today=[t,...L.today.filter(x=>x._id!==id)];
+ openDrawer=null;delegatingId=null;clearTimeout(panelTimer);
+ renderChips();
+ busy=true;
+ const card=$('#card');
+ if(card){card.classList.add('leave-left');
+  setTimeout(()=>{renderCard('enter-right');finishBusy();toast(msg||'<b>Up now.</b> Skipped the queue.');},380);}
+ else{renderCard('enter');finishBusy();toast(msg||'<b>Up now.</b> Skipped the queue.');}
+}
+async function bringNow(id,msg){
+ if(busy)return;
+ try{await mut('tasks:wake',{id});}catch(e){}
+ pullNow(id,msg||'<b>Unparked.</b> Up now.');
+}
+
+/* ═══ the stage system plumbing ═══ */
+function renderPanel(){if(openDrawer)renderDrawer();}
+function swapStage(){
+ stage.classList.add('panel-out');
+ setTimeout(()=>{
+  openDrawer?renderDrawer():renderCard();
+  stage.classList.remove('panel-out');stage.classList.add('panel-in');
+  setTimeout(()=>stage.classList.remove('panel-in'),400);
+ },180);
+}
+function schedulePanelRevert(){
+ clearTimeout(panelTimer);
+ if(!openDrawer)return;
+ panelTimer=setTimeout(()=>{
+  if(panelHover){schedulePanelRevert();return;}
+  if(openDrawer){openDrawer=null;delegatingId=null;pairA=pairB=null;renderChips();swapStage();}
+ },10000);
+}
+function toggleDrawer(name){
+ openDrawer=(openDrawer===name)?null:name;
+ delegatingId=null;pairA=pairB=null;
+ renderChips();swapStage();
+ schedulePanelRevert();
+}
+
+/* ═══ verbs ═══ */
+function doDone(note){
+ if(openDrawer){toggleDrawer(openDrawer);return;}
+ if(busy||!cur())return;busy=true;
+ const t=cur(),prevStatus=t.status;const card=$('#card');
+ stopFocus();
+ mut('tasks:markDone',{id:t._id,note:note||undefined}).catch(()=>{hidden.delete(t._id);render();});
+ hide(t._id);
+ // A few seconds to change your mind — Z (or the toast) restores it (D14).
+ lastUndo={at:Date.now(),run:()=>undoDone(t,prevStatus)};
+ const active=t.startedAt?fmtDur(Date.now()-t.startedAt):null;
+ const openFor=fmtAge(Date.now()-t._creationTime);
+ card.classList.add('completing');burst();
+ setTimeout(()=>card.classList.add('leave-up'),500);
+ setTimeout(()=>{
+  // By id, never by position — a brief push during the animation may already
+  // have rebuilt L.today without this task, and shift() would eat the next one.
+  L.today=L.today.filter(x=>x._id!==t._id);
+  renderPanel();renderCard('enter');finishBusy();
+  toast(`<b>Done${active?' in '+active:''}.</b> Open ${openFor} — ${L.today.length?'next one’s up.':'that was the last one.'}<span class="tundo"> · Z to undo</span>`,UNDO_MS);
+ },1000);
+}
+const UNDO_MS=6000;
+function doUndo(){
+ if(!lastUndo||Date.now()-lastUndo.at>UNDO_MS){lastUndo=null;return;}
+ if(busy)return; // mid-animation — keep the offer, let them press again
+ const u=lastUndo;lastUndo=null;u.run();
+}
+function undoDone(t,prevStatus){
+ mut('tasks:setStatus',{id:t._id,status:prevStatus||'today'}).catch(()=>{});
+ hidden.delete(t._id);
+ // Optimistically bring it back as the current card (the push reconciles) —
+ // mirrors pullNow: mutate L.today, light-render, never the L-rebuilding render().
+ L.today=[t,...L.today.filter(x=>x._id!==t._id)];
+ openDrawer=null;busy=false;
+ renderChips();renderCard('enter');
+ toast('<b>Kept.</b> Not done after all — back on your list.');
+}
+// Shift+D — complete with a note for future reference (stored as completionNote).
+function doDoneNotes(){
+ if(busy||!cur()||openDrawer)return;
+ const acts=document.getElementById('acts');if(!acts)return;
+ acts.innerHTML=`<input class="snote" id="dnoteIn" type="text" maxlength="200"
+   placeholder="Completion note — Enter to finish, Esc to just complete"
+   onkeydown="if(event.key==='Enter'){finishDoneNote()}else if(event.key==='Escape'){cancelCardInput()}">
+  <button class="mini yes" onclick="finishDoneNote()">Done</button>`;
+ setTimeout(()=>{const i=document.getElementById('dnoteIn');if(i)i.focus();},40);
+}
+function finishDoneNote(){const i=document.getElementById('dnoteIn');doDone(i?i.value.trim():'');}
+function cancelCardInput(){renderCard();}
+/* Done + follow-up (U, slice 5.5): complete the current task AND mint what
+   comes next from one short line. The AI drafts the follow-up with the
+   completed task as context (timing → a parked task the waker returns);
+   AI down → the raw instruction captures as-is. Esc = nothing completes. */
+function doFollowUp(){
+ if(busy||!cur()||openDrawer)return;
+ const acts=document.getElementById('acts');if(!acts)return;
+ acts.innerHTML=`<input class="snote" id="fupIn" type="text" maxlength="200"
+   placeholder="Follow-up — what comes back, and when? Enter to finish, Esc to cancel"
+   onkeydown="if(event.key==='Enter'){finishFollowUp()}else if(event.key==='Escape'){cancelCardInput()}">
+  <button class="mini yes" onclick="finishFollowUp()">Done + follow-up</button>`;
+ setTimeout(()=>{const i=document.getElementById('fupIn');if(i)i.focus();},40);
+}
+const fupSlug=s=>s.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-+|-+$/g,'').slice(0,40);
+function finishFollowUp(){
+ if(busy||openDrawer)return; // doDone would no-op — the follow-up must not mint alone
+ const i=document.getElementById('fupIn');
+ const instruction=i?i.value.trim():'';
+ const t=cur();
+ if(!t)return;
+ doDone();
+ if(instruction)mintFollowUp(t,instruction); // rides alongside the done animation
+}
+async function mintFollowUp(orig,instruction){
+ let draft=null;
+ try{
+  draft=await act('ai:draftFollowUp',{originalTitle:orig.title,
+   originalContext:orig.contextLine||orig.note||undefined,instruction});
+ }catch(e){/* key gate open / model down — capture the raw line instead */}
+ try{
+  const res=await mut('tasks:capture',{
+   title:draft?draft.title:instruction,
+   areaKey:orig.area?orig.area.key:undefined, // the work stays in its own area
+   status:'next', // the user minted it deliberately — triaged, not a proposal
+   size:draft?draft.size:undefined,
+   source:'followup',
+   contextLine:draft?draft.contextLine:`Follow-up to “${orig.title}” (just completed).`,
+   kickoffPrompt:draft?draft.kickoffPrompt:undefined,
+   // Semantic dedupe (the granola lesson): a re-fire can't double, but a
+   // different follow-up from the same task still mints its own row.
+   dedupeKey:`followup:${orig._id}:${fupSlug(instruction)}`,
+  });
+  await mut('tasks:connect',{aId:res.taskId,bId:orig._id}).catch(()=>{}); // provenance cluster
+  const wakeMs=draft&&draft.wakeInHours>0?Date.now()+draft.wakeInHours*3600000:null;
+  if(wakeMs)await mut('tasks:snooze',{id:res.taskId,until:wakeMs}).catch(()=>{});
+  toast(`<b>Follow-up queued.</b> ${esc(draft?draft.title:instruction)}${wakeMs?` — back ${fmtWake(wakeMs)}`:' — on next'}.`);
+ }catch(e){/* mutation toast already said "didn't stick" */}
+}
+// Delegate the current card task — surfaces the built delegate flow on the main card (G).
+function cardDelegate(){
+ if(busy||!cur()||openDrawer)return;
+ const acts=document.getElementById('acts');if(!acts)return;
+ acts.innerHTML=`<input class="snote" id="cdwho" style="max-width:220px" placeholder="Hand to whom? — Enter, Esc to cancel"
+   onkeydown="if(event.key==='Enter'){cardGoDelegate()}else if(event.key==='Escape'){cancelCardInput()}">
+  <button class="mini yes" onclick="cardGoDelegate()">Go</button>`;
+ setTimeout(()=>{const i=document.getElementById('cdwho');if(i)i.focus();},40);
+}
+async function cardGoDelegate(){
+ if(!cur())return;
+ const id=cur()._id;
+ const inp=document.getElementById('cdwho');
+ const person=inp&&inp.value.trim()?inp.value.trim():undefined;
+ try{
+  await mut('tasks:delegate',{taskIds:[id],person});
+  hide(id);
+  L.today=L.today.filter(t=>t._id!==id);
+  renderChips();renderCard('enter');
+  toast(`<b>Off your plate.</b> Parked on ${esc(person||'them')} — the handover task is on today.`);
+ }catch(e){renderCard();}
+}
+function doSwap(){
+ if(openDrawer){toggleDrawer(openDrawer);return;}
+ if(busy)return;
+ if(L.today.length<2){toast('Nothing to swap with — this is the last one.');return;}
+ busy=true;stopFocus();
+ const rot=[...L.today.map(t=>t._id).slice(1),L.today[0]._id];
+ mut('checkins:chooseToday',{taskIds:rot}).catch(()=>{});
+ $('#card').classList.add('leave-left');
+ setTimeout(()=>{
+  // Reorder by id — idempotent against a push that already applied the swap.
+  const byId=new Map(L.today.map(t=>[t._id,t]));
+  L.today=[...rot.map(id=>byId.get(id)).filter(Boolean),
+   ...L.today.filter(t=>!rot.includes(t._id))];
+  renderCard('enter-right');renderPanel();finishBusy();
+  toast('<b>Swapped.</b> No drama — the other one keeps.');
+ },380);
+}
+function toggleSnooze(){
+ if(openDrawer){toggleDrawer(openDrawer);return;}
+ if(busy||!cur())return;
+ const acts=$('#acts');
+ if(snoozeOpen){const p=document.querySelector('.snooze-pop');if(p)p.remove();snoozeOpen=false;return;}
+ snoozeOpen=true;
+ const pop=document.createElement('div');pop.className='snooze-pop';
+ pop.innerHTML=`<input class="snote" id="snote" type="text" maxlength="140"
+   placeholder="Where are you up to? — N to type, Enter when done, then L / T"
+   onkeydown="if(event.key==='Enter'||event.key==='Escape')this.blur()">
+  <div class="srow">
+   <button class="btn" onclick="doSnooze('later today')">${icons.moon} Later today <span class="kbd">L</span></button>
+   <button class="btn" onclick="doSnooze('tomorrow')">${icons.moon} Tomorrow <span class="kbd">T</span></button>
+  </div>`;
+ acts.appendChild(pop);
+}
+function laterTodayTs(){return Date.now()+3*3600000;}
+function tomorrowTs(){const d=new Date();d.setDate(d.getDate()+1);d.setHours(8,0,0,0);return d.getTime();}
+/* Progress note → re-entry context. Local tidy lands instantly; the AI pass
+   (ai:polishNote) upgrades it when the key gate is open. Fail = keep local. */
+function localPolish(raw){
+ let x=raw.trim().replace(/\s+/g,' ');
+ x=x.charAt(0).toUpperCase()+x.slice(1);
+ if(!/[.!?]$/.test(x))x+='.';
+ return `Paused ${hhmm(new Date())} — ${x}`;
+}
+function saveNoteFor(t,raw){
+ mut('tasks:update',{id:t._id,contextLine:localPolish(raw)}).catch(()=>{});
+ act('ai:polishNote',{title:t.title,note:raw,previousContextLine:t.contextLine||undefined})
+  .then(r=>mut('tasks:update',{id:t._id,contextLine:r.contextLine}))
+  .catch(()=>{});
+}
+function doSnooze(when){
+ if(busy||!cur())return;busy=true;snoozeOpen=false;stopFocus();
+ const t=cur();
+ const until=when==='tomorrow'?tomorrowTs():laterTodayTs();
+ const noteEl=$('#snote');
+ const raw=noteEl?noteEl.value.trim():'';
+ if(raw)saveNoteFor(t,raw);
+ mut('tasks:snooze',{id:t._id,until}).catch(()=>{hidden.delete(t._id);render();});
+ hide(t._id);
+ $('#card').classList.add('leave-sink');
+ setTimeout(()=>{
+  L.today=L.today.filter(x=>x._id!==t._id);
+  renderCard('enter');renderPanel();finishBusy();
+  toast(raw
+   ?`<b>Parked</b> till ${when} — progress note saved with the task.`
+   :`<b>Parked</b> till ${when}. It comes back by itself — no guilt.`);
+ },500);
+}
+function confirmIt(id){
+ const t=shown(S.inbox).find(x=>x._id===id);
+ const row=document.getElementById('i'+id);if(row)row.classList.add('out');
+ mut('tasks:confirmProposed',{id}).catch(()=>{});
+ // Local splice only — the confirmed task stays live on every other surface.
+ toast(`<b>Confirmed</b> into ${t?esc(t.area.key):'the list'} — it's on the list.`);
+ setTimeout(()=>{S.inbox=S.inbox.filter(x=>x._id!==id);inboxSettled();},350);
+}
+function dismissIt(id){
+ const row=document.getElementById('i'+id);if(row)row.classList.add('out');
+ mut('tasks:setStatus',{id,status:'dropped'}).catch(()=>{hidden.delete(id);render();});
+ hide(id);
+ toast('Dropped. The sweep won’t re-propose it.');
+ setTimeout(inboxSettled,350);
+}
+/* Last proposal handled → hand the stage back to Now (docs/06-surfaces.md). */
+function inboxSettled(){
+ renderChips();
+ if(openDrawer==='inbox'&&!shown(S.inbox).length)toggleDrawer('inbox');
+ else if(openDrawer)renderDrawer();
+}
+
+/* ═══ energy (battery ↔ meta config:energy) ═══ */
+function renderEnergy(){
+ const btn=$('#ebtn');if(!btn)return;
+ const bars={low:1,steady:2,deep:3}[energy]||2;
+ let cells='';
+ for(let i=0;i<bars;i++)cells+=`<rect x="${4.5+i*4.7}" y="9.5" width="3.4" height="5" rx="1" fill="currentColor"/>`;
+ btn.className='ebtn e-'+({low:'light',steady:'steady',deep:'deep'}[energy]||'steady');
+ btn.innerHTML=`<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="2.5" y="7" width="16.5" height="10" rx="2.5"/><path d="M21.5 10.5v3"/>${cells}</svg>`;
+}
+function cycleEnergy(){
+ const order=['low','steady','deep'];
+ setEnergy(order[(order.indexOf(energy)+1)%3]);
+}
+function setEnergy(level){
+ energy=level;energySetAt=Date.now();
+ renderEnergy();
+ mut('meta:setMeta',{key:'config:energy',value:level}).catch(()=>{});
+ const label={low:'Low',steady:'Steady',deep:'Deep'}[level];
+ if(busy||!cur())return;
+ if(level==='steady'){toast('<b>Steady.</b> Keeping the planned order.');return;}
+ if(effOf(cur())===level){toast(`<b>${label} energy.</b> This one already fits — crack on.`);return;}
+ // Re-pick within today's list only (docs/06-surfaces.md — the dial reorders the plan,
+ // it doesn't quietly promote backlog into the day).
+ const m=L.today.slice(1).find(t=>effOf(t)===level&&!proposed(t));
+ if(!m){toast(level==='low'?'Nothing lighter on deck — try a quick win below.':'Nothing deep queued right now.');return;}
+ pullNow(m._id,level==='low'
+  ?'<b>Lighter one up.</b> Low battery is still progress.'
+  :'<b>Going deep.</b> Protect the next half hour.');
+}
+
+/* ═══ day thread: meetings + parked markers (server-driven) ═══ */
+function threadParked(){
+ return shown(S.brief?S.brief.upcoming:[]).filter(t=>t.snoozeUntil);
+}
+/* Only same-day wakes sit on the thread — a tomorrow-morning park at the left
+   edge would read as "already past". The upcoming strip still shows them all. */
+function threadMarkers(){
+ return threadParked().filter(t=>sameLocalDay(new Date(t.snoozeUntil),new Date()));
+}
+function renderThreadEvents(){
+ const box=$('#tmarks');if(!box)return;
+ if(drag&&drag.active)return; // never replace a marker mid-drag
+ const now=Date.now();
+ let html='';
+ (S.brief?S.brief.meetings:[]).filter(m=>m.startAt>now-60000&&m.startAt-now<24*3600000).forEach(m=>{
+  const mins=Math.max(0,Math.round((m.startAt-now)/MIN));
+  let pos=(localMinutes(m.startAt)-threadS)/(threadE-threadS)*100,off=false;
+  if(pos<0)return;
+  if(pos>100){pos=100;off=true;}
+  const when=mins>90?`at ${hhmm(new Date(m.startAt))}`:`in ${mins} min`;
+  const title=m.url?`<a href="${esc(m.url)}" target="_blank" rel="noopener" style="color:inherit">${esc(m.title)}</a>`:esc(m.title);
+  html+=`<div class="tmwrap ${mins<=30?'soon':''} ${off?'offedge':''} ${pos>75?'edge-r':''}" style="left:${pos}%">
+    <div class="tmark"></div>
+    <span class="tmtime">${hhmm(new Date(m.startAt))}</span>
+    <div class="tmcard">${title} · <b>${when}</b></div>
+   </div>`;
+ });
+ threadMarkers().forEach((t,i)=>{
+  const mins=Math.max(0,Math.round((t.snoozeUntil-now)/MIN));
+  let pos=(localMinutes(t.snoozeUntil)-threadS)/(threadE-threadS)*100;
+  pos=Math.max(0,Math.min(100,pos));
+  const back=mins<=90?`back in ${mins} min`:`back ${fmtWake(t.snoozeUntil)}`;
+  html+=`<div class="tmwrap sched ${pos>75?'edge-r':''}" style="left:${pos}%" data-si="${i}">
+    <div class="tmark" style="border-color:${color(t)};background:${tintHex(color(t))}"></div>
+    <span class="tmtime" style="color:${color(t)}">${hhmm(new Date(t.snoozeUntil))}</span>
+    <div class="tmcard">${esc(t.title)} · <b>${back}</b> · drag to move, pull off for now</div>
+   </div>`;
+ });
+ setHTML(box,html);
+}
+
+/* ═══ drag-to-park ═══ */
+function beginDragCandidate(task,e,kind){
+ if(busy)return;
+ drag={task,kind,sx:e.clientX,sy:e.clientY,active:false,hintOffset:null};
+}
+function hideDragHint(){
+ $('#draghint').classList.remove('on');
+ $('#dragslot').classList.remove('on');
+}
+function updateDragHint(e){
+ // One layout read per drag, not per pointermove (the rail doesn't move mid-drag).
+ const r=drag.rect||(drag.rect=document.querySelector('.thread').getBoundingClientRect());
+ const inX=e.clientX>=r.left-8&&e.clientX<=r.right+8;
+ const inY=e.clientY>=r.top-34&&e.clientY<=r.bottom+34;
+ if(!inX||!inY){drag.hintOffset=null;hideDragHint();return;}
+ const frac=Math.max(0,Math.min(1,(e.clientX-r.left)/r.width));
+ const timeMin=threadS+frac*(threadE-threadS);
+ let off=timeMin-threadNow,label;
+ if(off<=70){
+  const opts=[5,15,30,45,60];
+  off=opts.reduce((a,b)=>Math.abs(b-(timeMin-threadNow))<Math.abs(a-(timeMin-threadNow))?b:a,5);
+  label=`in ${off} min`;
+ }else{
+  const snapped=Math.round(timeMin/15)*15;
+  off=snapped-threadNow;
+  label=`at ${fmtMin(snapped)}`;
+ }
+ drag.hintOffset=off;
+ const pos=Math.max(0,Math.min(100,((threadNow+off-threadS)/(threadE-threadS))*100));
+ const hint=$('#draghint'),slot=$('#dragslot');
+ hint.textContent=label;hint.style.left=pos+'%';hint.classList.add('on');
+ slot.style.left=pos+'%';slot.classList.add('on');
+}
+/* Park = tasks:snooze at minute granularity; the waker brings it back
+   ("Back as promised") — no client timer (docs/04-functions-and-api.md). Waiting rows become a
+   TIMED CHASE (new task); to-confirm rows confirm + park in one gesture. */
+async function parkTask(t,kind,off){
+ const until=Date.now()+off*MIN;
+ const backLabel=off<=70?`in ${off} min`:'at '+hhmm(new Date(until));
+ const wasNow=cur()&&cur()._id===t._id;
+ try{
+  if(kind==='waiting'){
+   const who=t.waitingOn||'them';
+   // dedupeKey per source task: re-dragging RESCHEDULES the open chase
+   // (capture dedupe refreshes, snooze re-times) instead of minting twins.
+   const r=await mut('tasks:capture',{
+    title:`Chase ${who} — ${t.title}`,
+    areaKey:t.area.key,status:'today',source:'glass',
+    dedupeKey:`glass:chase:${t._id}`,
+    contextLine:`Was waiting ${wDays(t)}d — parked as a timed chase.`,
+    kickoffPrompt:`Draft a chase to ${who} about "${t.title}" in the user's tone of voice, for approval.`});
+   await mut('tasks:snooze',{id:r.taskId,until});
+   toast(`<b>Chase parked.</b> You'll poke ${esc(who)} ${backLabel}.`);
+  }else{
+   if(kind==='inbox')await mut('tasks:confirmProposed',{id:t._id});
+   await mut('tasks:snooze',{id:t._id,until});
+   hide(t._id);
+   toast(`<b>Parked on the timeline.</b> Back ${backLabel}.`);
+  }
+ }catch(e){hidden.delete(t._id);render();return;}
+ if(wasNow)L.today=L.today.filter(x=>x._id!==t._id);
+ renderChips();renderPanel();renderUpcoming();renderThreadEvents();
+ if(wasNow&&!openDrawer)renderCard('enter');
+}
+function renderUpcoming(){
+ const u=$('#upcoming');
+ if(u.querySelector('#upnote'))return; // note editor open — don't wipe it
+ const ups=threadParked();
+ if(!ups.length){upListOpen=false;setHTML(u,'');return;}
+ const s=ups[0];
+ const total=S.brief?S.brief.counts.upcoming:ups.length;
+ const rel=s.snoozeUntil>Date.now()?'in '+fmtAge(s.snoozeUntil-Date.now()):'now';
+ // hover → the full context on the next upcoming task
+ const pop=`<div class="uppop" aria-hidden="true">
+   <div class="pt"><span class="dot" style="background:${color(s)}"></span><span>${esc(s.title)}</span></div>
+   <div class="pmeta">Upcoming ${esc(fmtWake(s.snoozeUntil))} · ${esc(rel)}${s.size?' · '+esc(s.size):''}</div>
+   ${s.contextLine?`<div class="pctx">${esc(s.contextLine)}</div>`:''}
+   ${s.area?`<div class="parea">${esc(s.area.label)}</div>`:''}</div>`;
+ // click → toggle the whole upcoming timeline as a list
+ const more=total>1?`<span class="upmore" role="button" tabindex="0" onclick="toggleUpList()"
+   onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleUpList()}"
+   >${upListOpen?'Hide timeline':'+'+(total-1)+' more on the timeline'}</span>`:'';
+ let list='';
+ if(upListOpen){
+  list='<div class="uplist">'+ups.map(t=>`<div class="uprow">
+    <span class="ut">${esc(fmtWake(t.snoozeUntil))}</span>
+    <span class="dot" style="background:${color(t)}"></span>
+    <span class="un">${esc(t.title)}</span>
+    ${t.contextLine?`<span class="uc">${esc(t.contextLine)}</span>`:''}
+    <button class="mini" onclick="bringNow('${t._id}','<b>Unparked.</b> Up now.')">Now</button>
+   </div>`).join('')+'</div>';
+ }
+ setHTML(u,`<div class="upcard">
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>
+  <span class="uptime">Upcoming ${fmtWake(s.snoozeUntil)}</span>
+  <span class="dot" style="background:${color(s)}"></span>
+  <span class="uptitle">${esc(s.title)}</span>${more}
+  <button class="mini notebtn" onclick="upNote()">✎ Note</button>
+  <button class="mini" onclick="bringNow('${s._id}','<b>Unparked.</b> Up now.')">Now</button>
+  ${pop}</div>${list}`);
+}
+function toggleUpList(){upListOpen=!upListOpen;renderUpcoming();}
+function upNote(){
+ const u=$('#upcoming');const s=threadParked()[0];if(!s)return;
+ u.innerHTML=`<div class="upcard">
+  <span class="uptime">${fmtWake(s.snoozeUntil)}</span>
+  <input class="snote" id="upnote" type="text" maxlength="140" data-tid="${s._id}"
+   placeholder="Where did you get to? AI tidies it into the context"
+   onkeydown="if(event.key==='Enter')saveUpNote();else if(event.key==='Escape'){this.remove();renderUpcoming()}">
+  <button class="mini yes" onclick="saveUpNote()">Save</button></div>`;
+ u._html=null; // bypass the setHTML cache for this transient editor
+ $('#upnote').focus();
+}
+function saveUpNote(){
+ const el=$('#upnote');
+ const v=el?el.value.trim():'';
+ // The task the editor was OPENED for — a push can re-sort upcoming mid-type,
+ // and threadParked()[0] would then be someone else's task.
+ const s=el?taskById(el.dataset.tid):null;
+ if(el)el.remove(); // frees renderUpcoming's editor guard
+ if(v&&s){
+  saveNoteFor(s,v);
+  toast('<b>Note saved.</b> It travels with the task — AI tidies it when keyed.');
+ }
+ renderUpcoming();
+}
+document.addEventListener('pointermove',e=>{
+ if(!drag)return;
+ if(!drag.active){
+  if(Math.hypot(e.clientX-drag.sx,e.clientY-drag.sy)<7)return;
+  drag.active=true;
+  document.body.classList.add('dragging');
+  const g=document.createElement('div');g.id='dragGhost';
+  g.innerHTML=`<span class="dot" style="background:${color(drag.task)}"></span>${esc(drag.task.title)}`;
+  document.body.appendChild(g);drag.ghost=g;
+ }
+ drag.ghost.style.left=(e.clientX+14)+'px';
+ drag.ghost.style.top=(e.clientY+10)+'px';
+ updateDragHint(e);
+});
+document.addEventListener('pointerup',()=>{
+ if(!drag)return;
+ const d=drag;drag=null;
+ document.body.classList.remove('dragging');
+ if(d.ghost)d.ghost.remove();
+ hideDragHint();
+ if(!d.active){if(pending){pending=false;render();}return;}
+ if(d.kind==='sched'){
+  if(d.hintOffset!=null){
+   const until=Date.now()+d.hintOffset*MIN;
+   mut('tasks:snooze',{id:d.task._id,until}).catch(()=>{});
+   toast(`<b>Moved.</b> Back ${d.hintOffset<=70?`in ${d.hintOffset} min`:'at '+hhmm(new Date(until))}.`);
+  }else{
+   bringNow(d.task._id,'<b>Pulled off the timeline.</b> Up now.');
+  }
+ }else if(d.hintOffset!=null)parkTask(d.task,d.kind,d.hintOffset);
+ if(pending){pending=false;render();}
+});
+
+/* ═══ capture (⌘K) — capture is instant; AI enrichment upgrades it after ═══ */
+function isQuestion(q){
+ if(/\?\s*$/.test(q))return true;
+ if(/^(what|which|who|whose|when|where|how|why|am|is|are|do|does|did|can|could|should|show|any|anything|something|find)\b/i.test(q))return true;
+ // Filter-intent phrases are Enter-inert too (docs/06-surfaces.md: 'deep work in
+ // finance' must search, not capture) — the capture-anyway row still exists.
+ return /\s/.test(q.trim())&&/\b(waiting|blocked|chas(e|ing)|owed|stuck|quick|easy|small|light|low energy|deep|meaty|heavy|old|ageing|aging|stale|overdue|forgotten|snoozed|parked|someday|backburner|delegate|automate|hand ?off)\b/i.test(q);
+}
+async function submitCapture(){
+ const inp=$('#capIn'),go=$('#capGo');
+ const text=inp.value.trim();
+ if(!text||go.disabled)return;
+ if(!forceCap&&isQuestion(text)&&!document.body.classList.contains('focusing')){aiSearch(text);return;}
+ sres=[];editRef=null;omniIntent=false;
+ go.disabled=true;inp.disabled=true;
+ go.innerHTML='<span class="dots"><span>●</span><span>●</span><span>●</span></span>';
+ let r=null;
+ try{r=await mut('tasks:capture',{title:text,source:'glass'});}
+ catch(e){
+  go.disabled=false;inp.disabled=false;go.textContent='Capture';
+  return;
+ }
+ inp.value='';inp.disabled=false;go.disabled=false;go.textContent='Capture';
+ if(document.body.classList.contains('focusing')){
+  closeOmni();
+  enrichCaptured(r.taskId,text);
+  toast('<b>Parked.</b> Back to the one thing.');
+  return;
+ }
+ inp.focus();
+ renderCapCard(r.taskId,text,null,'Filed. AI is enriching it…');
+ enrichCaptured(r.taskId,text);
+ toast('<b>Captured.</b> Back to the one thing.');
+}
+async function enrichCaptured(id,title){
+ try{
+  const g=await act('ai:enrichCapture',{title});
+  await mut('tasks:update',{id,areaKey:g.areaKey,size:g.size,
+   contextLine:g.contextLine,kickoffPrompt:g.kickoffPrompt});
+  if(document.getElementById('capCard'))renderCapCard(id,title,g,null);
+ }catch(e){
+  if(document.getElementById('capCard'))
+   renderCapCard(id,title,null,'AI pass unavailable — filed as-is; the next sweep will enrich it.');
+ }
+}
+function renderCapCard(id,title,g,note){
+ const effLabel={low:'low energy ok',steady:'steady',deep:'deep focus'};
+ const effCls={low:'light',steady:'steady',deep:'deep'};
+ const chips=g
+  ?`<span class="tagchip" style="background:${tintHex(areaColorFor(g.areaKey))};color:${areaColorFor(g.areaKey)}">${esc(g.areaKey)}</span>
+    <span class="tagchip eff-${effCls[sizeEff[g.size]]}">${effLabel[sizeEff[g.size]]}</span>
+    <span class="cctx">${esc(g.contextLine)}</span>`
+  :`<span class="cctx">${esc(note||'')}</span>`;
+ $('#capRes').innerHTML=`<div class="capcard" id="capCard">
+  <div class="l1">
+   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12.5 9.5 18 20 6.5"/></svg>
+   <span class="ct">${esc(title)}</span>
+   <button class="mini" onclick="capNow('${id}')">Now</button>
+   <button class="mini" onclick="undoCapture('${id}')">Undo</button>
+  </div>
+  <div class="l2">${chips}</div></div>`;
+ clearTimeout(capTimer);
+ capTimer=setTimeout(()=>{const c=document.getElementById('capCard');
+  if(c){c.classList.add('out');setTimeout(()=>{if(document.getElementById('capCard'))$('#capRes').innerHTML='';},400);}},8000);
+}
+function undoCapture(id){
+ mut('tasks:setStatus',{id,status:'dropped'}).catch(()=>{hidden.delete(id);render();});
+ hide(id);
+ renderChips();if(openDrawer)renderDrawer();
+ clearTimeout(capTimer);renderOmni();
+ toast('Undone. Never happened.');
+}
+function capNow(id){
+ if(busy)return;
+ closeOmni();
+ pullNow(id,'<b>Up now.</b> Straight to it.');
+}
+
+/* ═══ omnibox palette: search is local; questions go to ai:parseSearch ═══ */
+function paletteOpen(){return $('#palette').classList.contains('open');}
+function openOmni(){
+ $('#palette').classList.add('open');
+ $('#capIn').placeholder=document.body.classList.contains('focusing')
+  ?'Park a thought — it’ll be here after focus':'Search, ask, or dump a task…';
+ $('#capIn').value='';editRef=null;renderOmni();
+ setTimeout(()=>$('#capIn').focus(),50);
+}
+function closeOmni(){
+ $('#palette').classList.remove('open');
+ $('#capIn').value='';$('#capRes').innerHTML='';
+ sres=[];editRef=null;omniIntent=false;clearTimeout(capTimer);
+}
+function omniKey(e){
+ if(e.key==='Enter'){submitCapture();}
+ else if(e.key==='Escape'){closeOmni();}
+}
+function buildSearchables(){
+ const now=Date.now(),s=[],seen=new Set();
+ const push=(t,kind,status,canNow)=>{
+  if(seen.has(t._id))return;seen.add(t._id);
+  s.push({obj:t,kind,area:t.area.key,c:color(t),status,now:canNow,
+   title:t.status==='waiting'?`${t.waitingOn||'—'} — ${t.title}`:t.title});
+ };
+ L.today.forEach((t,i)=>push(t,'queue',i===0?'now':'on deck',i>0));
+ shown(S.open).forEach(t=>{
+  if(proposed(t))push(t,'inbox','to confirm',false);
+  else if(isParked(t,now))push(t,'scheduled','back '+fmtWake(t.snoozeUntil),true);
+  else if(t.status==='waiting')push(t,'waiting','waiting '+wDays(t)+'d',false);
+  else if(t.size==='xs')push(t,'win','quick win',true);
+  else push(t,'queue','on deck',true);
+ });
+ shown(S.someday).forEach(t=>push(t,'someday','someday',true));
+ return s;
+}
+const omniMatch=(it,q)=>(it.title+' '+it.area+' '+(it.obj.contextLine||'')).toLowerCase().includes(q.toLowerCase());
+function renderOmni(){
+ const q=$('#capIn').value.trim();
+ clearTimeout(capTimer);
+ if(document.body.classList.contains('focusing')){
+  omniIntent=false;sres=[];editRef=null;
+  $('#capGo').textContent='Capture';
+  $('#capRes').innerHTML=q
+   ?`<button class="caprow" style="border-top:none" onclick="submitCapture()">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+      <span>Park “${esc(q)}” for later</span><span class="pkbd">enter</span></button>`
+   :`<div class="pempty" style="padding:16px">Focus mode — capture only. No lists, no rabbit holes.</div>`;
+  return;
+ }
+ const q_isq=q&&isQuestion(q);
+ $('#capGo').textContent=q_isq?'Ask':'Capture';
+ omniIntent=q_isq;
+ let list,note='';
+ const all=buildSearchables();
+ if(!q)list=all;
+ else list=all.filter(it=>omniMatch(it,q));
+ if(q_isq&&!note)note='Press Enter to ask Helm — the AI turns questions into filters.';
+ sres=list.slice(0,q?5:8);
+ renderResults(sres,note,q);
+}
+function renderResults(list,note,q){
+ const noteHtml=note?`<div class="pnote">${icons.spark}<span>${esc(note)}</span></div>`:'';
+ const rows=list.map((it,i)=>{
+  const editing=editRef===it.obj;
+  return `<div>
+   <div class="prow">
+    <span class="dot" style="background:${it.c}"></span>
+    <span class="ptitle">${esc(it.title)}</span>
+    <span class="pstatus">${esc(it.status)}</span>
+    <button class="mini" onclick="pReview(${i})">${editing?'Close':'Review'}</button>
+    ${it.now?`<button class="mini yes" onclick="pNow(${i})">Now</button>`:''}
+   </div>
+   ${editing?`<div class="pedit">
+    <input id="pei" type="text" value="${esc(it.obj.contextLine||'')}"
+     placeholder="Context — where is this at?" onkeydown="if(event.key==='Enter')pSave(${i})">
+    <button class="mini yes" onclick="pSave(${i})">Save</button>
+   </div>`:''}
+  </div>`;}).join('');
+ const empty=(q&&!list.length)?`<div class="pempty" style="padding:14px">${omniIntent?'Nothing fits that question right now.':'Nothing matching — new one, then.'}</div>`:'';
+ const capBtn=q?`<button class="caprow" onclick="${omniIntent?'forceCapture()':'submitCapture()'}">
+   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+   <span>${omniIntent?'Capture this line as a new task anyway':`Capture “${esc(q)}” as a new task`}</span>
+   ${omniIntent?'':'<span class="pkbd">enter</span>'}</button>`:'';
+ $('#capRes').innerHTML=noteHtml+rows+empty+capBtn;
+ if(editRef){const e2=$('#pei');if(e2){e2.focus();e2.setSelectionRange(e2.value.length,e2.value.length);}}
+}
+let forceCap=false;
+async function forceCapture(){
+ forceCap=true;
+ try{await submitCapture();}finally{forceCap=false;}
+}
+async function aiSearch(q){
+ $('#capRes').innerHTML=`<div class="pnote">${icons.spark}<span>Asking Helm…</span></div>`;
+ let note,list;
+ try{
+  const p=await act('ai:parseSearch',{question:q});
+  const rows=await qry('queries:list',{...p.filters,limit:50});
+  note=p.explanation;
+  list=shown(rows).map(t=>({obj:t,area:t.area.key,c:color(t),
+   kind:isParked(t)?'scheduled':t.status==='someday'?'someday':t.status==='waiting'?'waiting':t.size==='xs'?'win':'queue',
+   title:t.status==='waiting'?`${t.waitingOn||'—'} — ${t.title}`:t.title,
+   status:isParked(t)?'back '+fmtWake(t.snoozeUntil):t.status,
+   now:t.status!=='waiting'&&t.status!=='done'&&t.status!=='dropped'}));
+ }catch(e){
+  note='AI search unavailable — plain text matches instead.';
+  list=buildSearchables().filter(it=>omniMatch(it,q));
+ }
+ omniIntent=true;
+ sres=list.slice(0,8);
+ renderResults(sres,note,q);
+}
+function pReview(i){
+ editRef=(editRef===sres[i].obj)?null:sres[i].obj;
+ renderResults(sres,'',$('#capIn').value.trim());
+}
+function pSave(i){
+ const v=$('#pei').value.trim();
+ const it=sres[i];
+ it.obj.contextLine=v;
+ mut('tasks:update',{id:it.obj._id,contextLine:v}).catch(()=>{});
+ editRef=null;
+ renderResults(sres,'',$('#capIn').value.trim());
+ if(cur()&&it.obj._id===cur()._id){cardSig='';renderCardIfChanged();}
+ toast('<b>Context updated.</b> Cheap re-entry, preserved.');
+}
+function pNow(i){
+ const it=sres[i];closeOmni();
+ if(it.kind==='scheduled')bringNow(it.obj._id);
+ else pullNow(it.obj._id);
+}
+
+/* ═══ morning review — fires once: getCheckin(today,'morning')===null ═══ */
+let morningCheckedFor=null,morningStep=1,suggestions=[];
+const yester={done:[],carried:[]};
+function morningOpen(){return $('#morning').classList.contains('open');}
+function prevDate(dateStr){
+ const [y,m,d]=dateStr.split('-').map(Number);
+ const dt=new Date(Date.UTC(y,m-1,d));dt.setUTCDate(dt.getUTCDate()-1);
+ return dt.toISOString().slice(0,10);
+}
+async function maybeMorning(){
+ // Latched PER DAY, not per page-load — an always-open glass must still greet
+ // each new morning when brief.date rolls over.
+ if(!S.brief||morningCheckedFor===S.brief.date||morningOpen())return;
+ morningCheckedFor=S.brief.date;
+ try{
+  const c=await qry('checkins:getCheckin',{date:S.brief.date,kind:'morning'});
+  if(c)return;
+  await buildMorningData();
+  morningStep=1;
+  renderMorning();
+  $('#morning').classList.add('open');
+ }catch(e){}
+}
+async function buildMorningData(){
+ const yd=prevDate(S.brief.date);
+ const [dl,ev]=await Promise.allSettled([
+  qry('queries:dayLog',{date:yd}),
+  qry('checkins:getCheckin',{date:yd,kind:'evening'}),
+ ]);
+ yester.done=dl.status==='fulfilled'
+  ?[...dl.value.completedPlanned.map(t=>({title:t.title,kind:'plan'})),
+    ...dl.value.completedAdhoc.map(t=>({title:t.title,kind:'rabbit'}))]
+  :[];
+ yester.carried=(ev.status==='fulfilled'&&ev.value&&ev.value.carried?ev.value.carried:[])
+  .map(id=>taskById(id)).filter(Boolean)
+  .filter(t=>t.status!=='done'&&t.status!=='dropped');
+ buildSuggestions();
+}
+function buildSuggestions(){
+ const seen=new Set(),out=[];
+ const carriedIds=new Set(yester.carried.map(t=>t._id));
+ const add=(t,why)=>{
+  if(!t||seen.has(t._id)||t.status==='done'||t.status==='dropped')return;
+  seen.add(t._id);out.push({t,why,state:'pending'});
+ };
+ (S.brief.meetings||[]).forEach(m=>{
+  if(m.prepTaskId){const t=taskById(m.prepTaskId);if(t)add(t,'prep for '+m.title);}
+ });
+ L.today.forEach(t=>add(t,carriedIds.has(t._id)?'carried from yesterday':'on today’s list'));
+ (S.brief.ageing||[]).filter(t=>t.status!=='waiting')
+  .forEach(t=>add(t,'ageing '+fmtAge(Date.now()-t.updatedAt)));
+ yester.carried.forEach(t=>add(t,'carried from yesterday'));
+ suggestions=out.slice(0,6);
+}
+function renderMorning(){
+ $('#mdots').innerHTML=[1,2,3].map(i=>`<i class="${i<=morningStep?'on':''}"></i>`).join('');
+ let body='';
+ if(morningStep===1){
+  body+=`<div class="glabel">Yesterday — completed <b>${yester.done.length}</b></div>`;
+  yester.done.forEach(d=>{body+=`<div class="drow">
+   <span class="badge ${d.kind==='plan'?'b-plan':'b-rabbit'}">${d.kind==='plan'?'planned':'rabbit hole'}</span>
+   <span>${esc(d.title)}</span></div>`;});
+  if(!yester.done.length)body+=`<div class="allhint">No completions logged yesterday.</div>`;
+  body+=`<div class="glabel">Didn't get finished <b>${yester.carried.length}</b></div>`;
+  yester.carried.forEach(c=>{body+=`<div class="drow">
+   <span class="dot" style="background:${color(c)}"></span>
+   <span>${esc(c.title)}</span><span class="meta">carried</span></div>`;});
+  if(!yester.carried.length)body+=`<div class="allhint">Nothing carried. Clean slate.</div>`;
+  body+=`<button class="mprim" onclick="morningNext()">Looks right — what's on the list? →</button>`;
+ }else if(morningStep===2){
+  body=buildAllBody(false)+`<button class="mprim" onclick="morningNext()">OK — what should today be? →</button>`;
+ }else{
+  const pending2=suggestions.filter(s=>s.state==='pending').length;
+  suggestions.forEach((s,i)=>{
+   body+=`<div class="sugrow">
+    <span class="dot" style="background:${color(s.t)}"></span>
+    <span class="sugtxt">${esc(s.t.title)}<span class="why">${esc(s.why)}</span></span>
+    ${s.state==='pending'
+     ?`<button class="mini yes" onclick="morningTriage(${i},'done')">Did it</button>
+       <button class="mini" onclick="morningTriage(${i},'today')">Today</button>
+       <button class="mini" onclick="morningTriage(${i},'delegate')">Delegate</button>
+       <button class="mini" onclick="morningTriage(${i},'skip')">Skip</button>`
+     :s.state==='asking'
+      ?`<input class="snote" id="mwho" style="max-width:140px" placeholder="Hand to whom?"
+         onkeydown="if(event.key==='Enter')morningDelegate(${i})">
+        <button class="mini yes" onclick="morningDelegate(${i})">Go</button>`
+     :s.state==='done'
+      ?`<span class="statechip" style="background:var(--green-bg);color:var(--green)">recorded ✓</span>`
+      :s.state==='today'
+       ?`<span class="statechip" style="background:var(--violet-bg);color:var(--violet)">today</span>`
+       :s.state==='delegated'
+        ?`<span class="statechip" style="background:var(--violet-bg);color:var(--violet)">delegated ✓</span>`
+        :`<span class="statechip" style="background:#EFF2F5;color:var(--faint)">not today</span>`}
+   </div>`;});
+  if(!suggestions.length)body+=`<div class="allhint">Nothing suggests itself — the day is yours.</div>`;
+  body+=`<button class="mprim" onclick="morningFinish()">${pending2?'Set the day with what’s triaged →':'Start the day →'}</button>`;
+ }
+ $('#mbody').innerHTML=`<div class="t3 embed">${body}</div>`;
+}
+function morningNext(){morningStep++;renderMorning();}
+function morningTriage(i,action){
+ const s=suggestions[i];
+ if(!s||(s.state!=='pending'&&s.state!=='asking'))return;
+ if(action==='delegate'){s.state='asking';renderMorning();
+  setTimeout(()=>{const w=$('#mwho');if(w)w.focus();},50);return;}
+ s.state=action;
+ if(action==='done'){
+  mut('tasks:markDone',{id:s.t._id}).catch(()=>{});
+  hide(s.t._id);
+  L.today=L.today.filter(t=>t._id!==s.t._id);
+ }
+ renderChips();renderMorning();
+}
+function morningDelegate(i){
+ const s=suggestions[i];if(!s)return;
+ const w=$('#mwho');
+ const person=w&&w.value.trim()?w.value.trim():undefined;
+ s.state='delegated';
+ mut('tasks:delegate',{taskIds:[s.t._id],person}).catch(()=>{});
+ hide(s.t._id);
+ L.today=L.today.filter(t=>t._id!==s.t._id);
+ renderChips();renderMorning();
+}
+function morningFinish(){
+ const chosen=suggestions.filter(s=>s.state==='today').map(s=>s.t);
+ const chosenIds=chosen.map(t=>t._id);
+ // Always write the morning check-in — it's what marks the ritual done, so it
+ // can't re-fire on the next load (docs/04-functions-and-api.md trigger contract).
+ mut('checkins:chooseToday',{taskIds:chosenIds}).catch(()=>{});
+ if(chosen.length)L.today=[...chosen,...L.today.filter(t=>!chosenIds.includes(t._id))];
+ renderChips();renderCard('enter');
+ const m=$('#morning');
+ m.style.opacity='0';
+ setTimeout(()=>{m.classList.remove('open');m.style.opacity='';},250);
+ toast(chosen.length
+  ?`<b>Day set.</b> ${chosen.length} committed — one at a time.`
+  :'<b>Morning review done.</b> Steady as she goes.');
+}
+
+/* ═══ day timeline ("N done today") ═══ */
+function renderDay(){
+ const dl=S.dayLog;
+ if(!dl){$('#dayBody').innerHTML='<div class="allhint">Loading the day…</div>';return;}
+ const all=[
+  ...dl.completedPlanned.map(t=>({t,kind:'plan'})),
+  ...dl.completedAdhoc.map(t=>({t,kind:'rabbit'}))]
+  .sort((a,b)=>(a.t.doneAt||0)-(b.t.doneAt||0));
+ let rows=all.map(({t,kind})=>{
+  const dur=(t.startedAt&&t.doneAt&&t.doneAt>t.startedAt)?fmtDur(t.doneAt-t.startedAt):null;
+  const meta=[dur,'open '+fmtAge((t.doneAt||Date.now())-t._creationTime)].filter(Boolean).join(' · ');
+  return `<div class="tentry"><div class="trow">
+   <span class="tt">${t.doneAt?hhmm(new Date(t.doneAt)):'—'}</span>
+   <span class="badge ${kind==='plan'?'b-plan':'b-rabbit'}">${kind==='plan'?'planned':'rabbit hole'}</span>
+   <span>${esc(t.title)}${t.provisional?' <span class="meta" style="margin-left:4px">(provisional)</span>':''}</span>
+   <span class="meta">${meta}</span></div>${t.completionNote?`<div class="dnote">${esc(t.completionNote)}</div>`:''}</div>`;
+ }).join('');
+ if(!all.length)rows='<div class="allhint">Nothing logged yet — the day is young.</div>';
+ $('#dayBody').innerHTML=`<div class="dscroll">${rows}</div>`+`
+  <div class="insight">${icons.bulb}<span><b style="font-weight:700">Learning seam</b> — Helm logs true start→done timings per task size and hour. As they accrue, the energy dial will pre-set itself.</span></div>
+  <button class="closeday" onclick="closeDay()" ${dayClosed?'disabled':''}>${dayClosed?'Day closed — see you tomorrow':'Close the day'}</button>`;
+}
+async function toggleDay(){
+ dayOpen=!dayOpen;
+ const s=$('#daySec');
+ if(dayOpen){
+  if(dayClosed===null&&S.brief){
+   try{const c=await qry('checkins:getCheckin',{date:S.brief.date,kind:'evening'});
+    dayClosed=!!c;}catch(e){dayClosed=false;}
+  }
+  renderDay();s.classList.add('open');
+ }
+ else s.classList.remove('open');
+}
+async function closeDay(){
+ if(dayClosed)return;
+ try{
+  const r=await mut('checkins:reconcileDay',{});
+  dayClosed=true;
+  renderDay();
+  toast(`<b>Day closed.</b> ${r.completedPlanned} planned + ${r.completedAdhoc} rabbit-holes banked${r.carried?`, ${r.carried} carried`:''}.`);
+ }catch(e){}
+}
+
+/* ═══ clock + day/evening watch ═══ */
+function calcEveningStart(){
+ // Real rule (docs/06-surfaces.md): evening watch starts at the first post-17:00
+ // completion in the dayLog; UI activity is the fallback before one lands.
+ const dl=S.dayLog;
+ if(dl){
+  const times=[...dl.completedPlanned,...dl.completedAdhoc]
+   .map(t=>t.doneAt).filter(Boolean).sort((a,b)=>a-b);
+  for(const ts of times){const m=localMinutes(ts);if(m>=17*60)return m;}
+ }
+ return eveningStartUI;
+}
+let uiDay=new Date().toDateString();
+function tickTime(){
+ const now=new Date();
+ // Midnight: date-dependent queries (brief/dayLog/newToday) only re-execute on
+ // writes, so an always-open tab would show yesterday all night — resubscribe
+ // to force fresh runs. maybeMorning re-arms off the new brief.date.
+ if(now.toDateString()!==uiDay){
+  uiDay=now.toDateString();
+  if(client&&!gateOpen())subscribeAll();
+ }
+ const [ch,cm]=hhmm(now).split(':');
+ $('#clock').innerHTML=`${ch}<span class="colon">:</span>${cm}`;
+ const day=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][now.getDay()];
+ const h=now.getHours();
+ const phase=h<12?'morning':h<17?'afternoon':'evening';
+ $('#greet').textContent=`${day} ${phase}. One thing at a time.`;
+ const mNow=h*60+now.getMinutes();
+ const evStart=calcEveningStart();
+ let s,e2,mm=mNow;
+ if(mNow>=8*60&&mNow<17*60){s=8*60;e2=17*60;}
+ else if(mNow>=17*60||mNow<4*60){
+  if(mNow<4*60)mm=mNow+1440;
+  if(evStart!==null){
+   s=evStart;
+   e2=Math.max(s+120,Math.ceil((mm+90)/30)*30);
+  }else{s=8*60;e2=17*60;mm=e2;}
+ }else{s=8*60;e2=17*60;mm=s;}
+ $('#tStart').textContent=fmtMin(s);
+ $('#tEnd').textContent=fmtMin(e2);
+ const pct=Math.max(0,Math.min(100,((mm-s)/(e2-s))*100));
+ $('#burn').style.width=pct+'%';$('#nowDot').style.left=pct+'%';
+ threadS=s;threadE=e2;threadNow=mm;
+ renderThreadEvents();
+}
+
+/* ═══ keyboard + pointer wiring ═══ */
+document.addEventListener('keydown',e=>{
+ if(gateOpen())return;
+ const k=e.key.toLowerCase();
+ if(morningOpen()){if(e.key==='Escape'&&!e.target.matches('input,textarea'))morningFinish();return;}
+ if((e.metaKey||e.ctrlKey)&&k==='k'){e.preventDefault();paletteOpen()?closeOmni():openOmni();return;}
+ // Beyond ⌘K, modifier combos belong to the browser: ⌘D must bookmark, not
+ // mark the real task done; ⌘C must copy, not open the palette.
+ if(e.metaKey||e.ctrlKey||e.altKey)return;
+ if(e.key==='Escape'&&paletteOpen()){closeOmni();return;}
+ if(paletteOpen()&&!e.target.matches('input,textarea'))return;
+ if(e.target.matches('input,textarea'))return;
+ if(k==='z'){e.preventDefault();doUndo();return;}
+ if(snoozeOpen){
+  if(k==='n'){e.preventDefault();const n=$('#snote');if(n)n.focus();return;}
+  if(k==='l'){doSnooze('later today');return;}
+  if(k==='t'){doSnooze('tomorrow');return;}
+  if(k==='s'||e.key==='Escape'){toggleSnooze();return;}
+  return;
+ }
+ if(k==='d'){if(e.shiftKey){e.preventDefault();doDoneNotes();}else doDone();}
+ else if(k==='u'){if(cur()&&!openDrawer)doFollowUp();}
+ else if(k==='g'){if(cur()&&!openDrawer)cardDelegate();}
+ else if(k==='s')toggleSnooze();else if(k==='w')doSwap();
+ else if(k==='f')startFocus();else if(k==='e')cycleEnergy();
+ else if(k==='c'){e.preventDefault();openOmni();}
+});
+document.querySelectorAll('.zone').forEach(z=>{
+ z.addEventListener('mouseenter',()=>document.body.classList.add('zone-hover'));
+ z.addEventListener('mouseleave',()=>document.body.classList.remove('zone-hover'));
+});
+stage.addEventListener('mouseenter',()=>{document.body.classList.add('card-hover');panelHover=true;});
+stage.addEventListener('mouseleave',()=>{document.body.classList.remove('card-hover');panelHover=false;schedulePanelRevert();});
+stage.addEventListener('click',()=>schedulePanelRevert());
+stage.addEventListener('pointerdown',e=>{
+ const row=e.target.closest('[data-tid]');
+ if(row&&!e.target.closest('button,input,a')){
+  const t=taskById(row.dataset.tid);
+  if(t)beginDragCandidate(t,e,row.dataset.dkind||'queue');
+  return;
+ }
+ if(openDrawer||!cur())return;
+ if(!e.target.closest('.card')||e.target.closest('button,a,input,.snooze-pop'))return;
+ beginDragCandidate(cur(),e,'queue');
+});
+document.querySelector('.thread').addEventListener('pointerdown',e=>{
+ const m=e.target.closest('.tmwrap.sched');
+ if(!m)return;
+ const t=threadMarkers()[+m.dataset.si];
+ if(!t||busy)return;
+ drag={task:t,kind:'sched',sx:e.clientX,sy:e.clientY,active:false,hintOffset:null};
+});
+
+/* ═══ boot ═══ */
+window.addEventListener('beforeunload',()=>{if(client)client.close();});
+Object.assign(window,{
+ gateGo,toggleDay,openOmni,closeOmni,renderOmni,omniKey,submitCapture,forceCapture,
+ cycleEnergy,doDone,doSwap,toggleSnooze,doSnooze,startFocus,toggleKickoff,
+ startSession,copyKick,toggleDrawer,setAllFilter,pullNow,bringNow,capNow,
+ undoCapture,confirmIt,dismissIt,askDelegate,cancelDelegate,goDelegate,
+ pReview,pSave,pNow,upNote,saveUpNote,closeDay,
+ morningNext,morningTriage,morningDelegate,morningFinish,toast,
+ renderUpcoming,toggleUpList,doDoneNotes,finishDoneNote,cancelCardInput,cardDelegate,cardGoDelegate,
+ startPair,pickPair,cancelPair,connectPair,mergePair,jumpLinked,
+ doFollowUp,finishFollowUp,
+});
+renderCard();renderEnergy();tickTime();
+setInterval(tickTime,30000);
+setTimeout(()=>document.body.classList.add('settled'),1500);
+tryBoot();
+</script>
+</body>
+</html>
