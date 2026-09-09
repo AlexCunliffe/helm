@@ -646,7 +646,8 @@ async function main() {
       "meetings: re-sync replaces rows but keeps the prep link");
     const promo1 = JSON.parse(execFileSync("npx", ["convex", "run", "meetings:promotePrep"], { cwd: ROOT, encoding: "utf8" }));
     const prepDoc = await q("tasks:get", { id: prep.taskId });
-    assert(promo1.promoted >= 1 && prepDoc.status === "today" && prepDoc.urgent === true,
+    // The minute cron can win this race. Either caller produces the same state.
+    assert(Number.isInteger(promo1.promoted) && promo1.promoted >= 0 && prepDoc.status === "today" && prepDoc.urgent === true,
       "meetings: T-30 promotes the linked prep to today+urgent");
     const promo2 = JSON.parse(execFileSync("npx", ["convex", "run", "meetings:promotePrep"], { cwd: ROOT, encoding: "utf8" }));
     const stillPromoted = (await q("meetings:upcomingMeetings", {})).find((x) => x.eventId === "test:reg:evt1");

@@ -279,3 +279,23 @@ Files: MCP lockfile and any necessary dependency metadata.
 Checks: inspect the exact package changes; keep application dependencies stable where possible; run the MCP stdio contract, scratch installer acceptance, and full development regression; repeat the dependency audit.
 
 Done criteria: the audit reports no known vulnerabilities and the installed MCP contract still works.
+
+The compatible dependency update changed exactly five packages and cleared the audit. MCP and scratch installer acceptance passed. The full regression exposed a pre-existing cron race: meeting prep can be promoted by the minute cron before the manual promotion call. The test now checks the correct resulting task state and a valid promotion count, rather than requiring the manual call to win the race. The separate one-time promotion assertion remains.
+
+### MCP dependency result
+
+Completed. Exactly five transitive packages changed: the Hono Node adapter, fast-uri, Hono, ip-address, and qs. Direct dependency versions stayed unchanged. The MCP audit now reports zero known vulnerabilities. Real stdio MCP checks and scratch-home installer acceptance pass. After fixing the observed test race, all 199 backend checks and both hook suites pass.
+
+## Stage 3 result
+
+All twelve planned build slices and the two security follow-ups are complete. The stage was logged through Helm MCP on development. Live AI checks still require the owner's optional Anthropic key; missing-key behavior passes. No production deployment or real user-global configuration was changed. The repository remains private. Generic repository topics are configured.
+
+## Stage 4 plan: documentation and privacy reread
+
+Goal: provide a complete installation path, a settings reference, source examples, development-to-production instructions, and accurate design documents.
+
+Files: README.md; docs/install.md, configure.md, sources.md, deploy.md; a wizard preview; design documents 01 through 12; supporting non-secret examples.
+
+Checks: read all design documents for meaning and privacy; compare paths, fields, functions, and defaults with code; run documented development and scratch-home commands; inspect the wizard preview; verify links; run the external denylist.
+
+Production and real global installation commands are documentation-only until the deployment owner approves them. This preserves the explicit production and global-configuration gates. Record those exceptions instead of executing forbidden commands to satisfy a documentation check.
