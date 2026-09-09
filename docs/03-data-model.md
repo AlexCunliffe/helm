@@ -39,7 +39,7 @@ Task indexes are `by_status`, `by_area`, `by_waiting` (`status`, `waitingSince`)
 
 ## Meetings
 
-`meetings` contains `eventId`, `title`, `startAt`, `endAt`, and `updatedAt`. `url`, `prepTaskId`, and `prepPromotedAt` are optional. `by_start` supports the rolling calendar window. `by_event` resolves stable event IDs. Sync preserves prep links for matching event IDs.
+`meetings` contains `eventId`, `title`, `startAt`, `endAt`, and `updatedAt`. `url`, `prepTaskId`, and `prepPromotedAt` are optional. `by_start` supports the rolling calendar window. `by_event` resolves stable event IDs. Sync reconciles a complete bounded snapshot by event ID. It preserves matching row IDs and prep state, repairs duplicate event IDs, and removes old or missing rows. Events are retained by window overlap, including long ongoing meetings.
 
 ## Settings and metadata
 

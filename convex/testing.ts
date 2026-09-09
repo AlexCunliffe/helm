@@ -6,10 +6,14 @@
  * namespace. Check-ins require exact snapshots of rows created by that run;
  * date-wide deletion is deliberately refused.
  */
-import { internalMutation, internalQuery } from "./_generated/server";
+import { internalMutation, internalQuery, internalAction } from "./_generated/server";
 import { v, ConvexError } from "convex/values";
 import { seedAreaRows } from "./areas";
-import { dayRange } from "./lib/time";
+import { dayRange, dateString } from "./lib/time";
+import { readSettings } from "./lib/settings";
+import { replaceMeetingWindow, readMeetingMirror, readUpcomingMeetings, promoteMeetingPrep } from "./meetings";
+import { removeFromNow } from "./lib/nowOrder";
+import { loadCalendarWindow } from "./lib/calendar";
 import { checkinDoc } from "./validators";
 
 export const purgeTestData = internalMutation({
@@ -93,5 +97,85 @@ export const removeFixtureAreas = internalMutation({
       await ctx.db.delete(area._id);
     }
     return null;
+  },
+});
+
+/** Exercise real mirror/promotion helpers, then ALWAYS roll back every write. */
+export const meetingWindowProbe = internalMutation({
+  args: {}, returns: v.null(),
+  handler: async (ctx) => {
+    let checks = 0;
+    const check = (condition: unknown, label: string) => { if (!condition) throw new ConvexError("MEETING_PROBE_FAILED: " + label); checks++; };
+    const settings = await readSettings(ctx);
+    const settingRow = await ctx.db.query("meta").withIndex("by_key", q => q.eq("key", "settings")).unique();
+    const value = { ...settings, timezone: "UTC", caps: { ...settings.caps, today: 3, meetingPrepLeadMin: 30 } };
+    if (settingRow) await ctx.db.patch(settingRow._id, { value }); else await ctx.db.insert("meta", { key: "settings", value });
+    const area = await ctx.db.query("areas").withIndex("by_key").first();
+    if (!area) throw new ConvexError("Seed an area before running the meeting probe.");
+    const now = Date.now(), minute = 60_000, hour = 60 * minute;
+    const task = (title: string) => ctx.db.insert("tasks", { title, areaId: area._id, status: "waiting", waitingSince: 1,
+      origin: "planned", source: "test", dedupeKey: "test:meeting-probe:" + title, updatedAt: now });
+    const a = await task("TEST early prep"), b = await task("TEST later prep"), ordinary = await task("TEST ordinary choice");
+    await ctx.db.patch(ordinary, { status: "today", waitingSince: undefined });
+    const long = { eventId: "test:meeting-probe:long", title: "TEST ongoing event", startAt: now - 3 * hour, endAt: now + 10 * minute };
+    const early = { eventId: "test:meeting-probe:early", title: "TEST earlier event", startAt: now + 15 * minute, endAt: now + hour };
+    const later = { eventId: "test:meeting-probe:later", title: "TEST later event", startAt: now + 35 * minute, endAt: now + 2 * hour };
+    const window = { windowStart: now - 2 * hour, windowEnd: now + 48 * hour };
+    await replaceMeetingWindow(ctx, { ...window, meetings: [long, early, later] });
+    const first = await readMeetingMirror(ctx), longRow = first.find(m => m.eventId === long.eventId)!;
+    const earlyRow = first.find(m => m.eventId === early.eventId)!;
+    check(first.length === 3, "complete replacement");
+    check((await readUpcomingMeetings(ctx, now, 36)).some(m => m.eventId === long.eventId), "long ongoing event is visible");
+    await ctx.db.patch(longRow._id, { prepTaskId: a, prepPromotedAt: now - minute });
+    await ctx.db.insert("meetings", { ...long, updatedAt: now + 1 }); // reproduce an inherited duplicate
+    await ctx.db.insert("meetings", { eventId: "test:meeting-probe:stale", title: "TEST old event", startAt: now - 5 * hour, endAt: now - 4 * hour, updatedAt: now });
+    await replaceMeetingWindow(ctx, { ...window, windowStart: now - hour, meetings: [{ ...long, title: "TEST updated ongoing event" }, early, later] });
+    const second = await readMeetingMirror(ctx), ongoing = second.find(m => m.eventId === long.eventId)!;
+    check(second.length === 3 && new Set(second.map(m => m.eventId)).size === 3, "duplicates and stale rows pruned");
+    check(ongoing.prepTaskId === a && ongoing.prepPromotedAt === now - minute, "matching duplicate prep state survives advancing lower bound");
+    check(second.find(m => m.eventId === early.eventId)!._id === earlyRow._id, "unchanged event row identity survives");
+    const beforeInvalid = JSON.stringify(second);
+    let rejected = false;
+    try { await replaceMeetingWindow(ctx, { ...window, meetings: [early, early] }); } catch { rejected = true; }
+    check(rejected && JSON.stringify(await readMeetingMirror(ctx)) === beforeInvalid, "invalid snapshot makes no writes");
+    for (const [eventId, prepTaskId] of [[early.eventId, a], [later.eventId, b]] as const) {
+      const meeting = await ctx.db.query("meetings").withIndex("by_event", q => q.eq("eventId", eventId)).unique();
+      await ctx.db.patch(meeting!._id, { prepTaskId, prepPromotedAt: undefined });
+    }
+    const date = dateString(now, "UTC");
+    let morning = await ctx.db.query("checkins").withIndex("by_date_kind", q => q.eq("date", date).eq("kind", "morning")).unique();
+    if (morning) await ctx.db.patch(morning._id, { chosen: [ordinary] });
+    else await ctx.db.insert("checkins", { date, kind: "morning", chosen: [ordinary], completedPlanned: [], completedAdhoc: [], carried: [] });
+    const chosen = async () => (await ctx.db.query("checkins").withIndex("by_date_kind", q => q.eq("date", date).eq("kind", "morning")).unique())!.chosen;
+    check((await promoteMeetingPrep(ctx, now)).promoted === 1, "only earlier prep initially enters window");
+    check((await chosen())[0] === a, "prep leads ordinary choice");
+    check((await ctx.db.get(a))!.waitingSince === undefined, "promotion clears wait clock");
+    check((await promoteMeetingPrep(ctx, now + 6 * minute)).promoted === 1, "second pass promotes later prep");
+    check((await chosen())[0] === a && (await chosen())[1] === b, "cross-pass chronological priority");
+    await ctx.db.patch(a, { status: "next" });
+    await removeFromNow(ctx, date, a);
+    check((await promoteMeetingPrep(ctx, now + 7 * minute)).promoted === 0, "one-time stamp prevents re-promotion");
+    check((await ctx.db.get(a))!.status === "next" && (await chosen())[0] === b, "later deliberate demotion is preserved");
+    await replaceMeetingWindow(ctx, { ...window, meetings: [later] });
+    check((await readMeetingMirror(ctx)).length === 1 && (await ctx.db.get(a)) !== null, "missing events pruned without deleting tasks");
+    throw new ConvexError("MEETING_PROBE_PASSED_ROLLED_BACK:" + checks);
+  },
+});
+
+/** Run the actual paging helper in the hosted action runtime with synthetic I/O. */
+export const calendarRuntimeProbe = internalAction({
+  args: {}, returns: v.object({ meetings: v.number(), requests: v.number(), timed: v.boolean() }),
+  handler: async () => {
+    const now = Date.now();
+    let requests = 0, timed = true;
+    const request: typeof fetch = async (_url, options) => {
+      requests++; timed = timed && !!options?.signal;
+      return new Response(JSON.stringify({ items: [{ id: "fixture-" + requests, summary: "Fixture event",
+        start: { dateTime: new Date(now + 60_000 * requests).toISOString() },
+        end: { dateTime: new Date(now + 120_000 * requests).toISOString() } }],
+        ...(requests === 1 ? { nextPageToken: "second" } : {}) }));
+    };
+    const meetings = await loadCalendarWindow("fixture-only", now, now + 3600_000, request);
+    return { meetings: meetings.length, requests, timed };
   },
 });

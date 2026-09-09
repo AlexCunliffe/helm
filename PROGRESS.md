@@ -373,3 +373,15 @@ Validation: development checks for choice-to-waiting/someday transitions, renewe
 QC repair 6 complete: waiting and someday choices cannot lead Now; deliberate non-today transitions remove their explicit priority; choose/prep clears stale waiting clocks. Meeting prep leads ordinary choices and retains chronological priority across later cron passes. Deliberate demotions, completions, snoozes, and removal from the order are respected.
 
 An independent verifier found and reproduced the cross-pass ordering edge in the first draft. The corrected implementation passed all 29 independent scenarios. TypeScript, the development push, 220 backend assertions, and hook/OAuth suites passed after the correction. The order helper uses a Convex-compatible module filename.
+
+## QC repair 7 plan: complete and reconcile the calendar mirror
+
+Findings: CVX-04 and CVX-06. Fetch every supported Google Calendar page before replacing data. Reject incomplete, invalid, duplicate, or oversized snapshots before persistence. Reconcile by event identity, preserve prep state, and prune missing or expired rows. Include long ongoing events across the lower window boundary.
+
+The existing live mirror test also temporarily deletes real meeting rows and restores only basic fields, losing prep links and row IDs. Replace it with transactional probes that always roll back. Verify this preservation issue independently and record its verdict in the QC table.
+
+Validation: isolated multi-page success/failure and capacity fixtures; rollback-only development probes for advancing windows, duplicate repair, prep preservation, missing-event pruning, cross-pass prep ordering, and deliberate demotion; TypeScript, development push, and the full suite. No live Google account connection.
+
+QC repair 7 complete (CVX-04, CVX-06, and independently confirmed ROOT-04): the mirror reads complete bounded pages before writing; rejects malformed response roots and incomplete/invalid snapshots; reconciles stable event IDs; preserves matching prep state; repairs duplicates; and prunes missing/expired rows. Long ongoing meetings remain visible.
+
+Regression mirror checks now use an always-rollback transaction, preserving real meeting IDs, links, stamps, tasks, settings, and check-ins. The independent verifier caught a malformed-response gap in the first draft; its corrected version passed 36 calendar scenarios and all 29 Now-order scenarios. TypeScript, development push, 213 top-level backend assertions, 14 rollback probes, a network-free hosted pagination probe, and hook/OAuth/calendar fixtures passed. No live Google account connection was made.

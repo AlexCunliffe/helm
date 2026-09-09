@@ -671,72 +671,12 @@ async function main() {
 
   // ── L · meetings mirror (4.2) ──
   console.log("\nL · meetings mirror (4.2)");
-  const mNow = Date.now();
-  const win = { windowStart: mNow - 2 * 3600_000, windowEnd: mNow + 48 * 3600_000 };
-  const seedEvents = (events) => execFileSync(
-    "npx", ["convex", "run", "meetings:replaceWindow", JSON.stringify({ ...win, meetings: events })],
-    { cwd: ROOT, encoding: "utf8" },
-  );
-  // Snapshot any real synced rows so the section is delta-safe and restorable.
-  // NB: the LIVE 15-min sync cron can replace the window mid-section (observed
-  // once) — a seeded-row assertion failing here with real meetings present is
-  // that race; the restore in `finally` is then a no-op-equivalent. Rare
-  // enough to tolerate: re-run rather than engineering around the cron.
-  const beforePrepMorning = await q("checkins:getCheckin", { date: todayLondon, kind: "morning" });
-  const realMeetings = (await q("meetings:upcomingMeetings", { horizonHours: 72 }))
-    .map(({ eventId, title, startAt, endAt, url }) => ({ eventId, title, startAt, endAt, ...(url ? { url } : {}) }));
-  try {
-    seedEvents([
-      { eventId: "test:reg:evt1", title: "TEST the vendor engineer call", startAt: mNow + 20 * 60_000, endAt: mNow + 50 * 60_000 },
-      { eventId: "test:reg:evt2", title: "TEST ops stand-up", startAt: mNow + 3 * 3600_000, endAt: mNow + 4 * 3600_000 },
-    ]);
-    const up = await q("meetings:upcomingMeetings", {});
-    const evt1 = up.find((x) => x.eventId === "test:reg:evt1");
-    assert(evt1 && up.find((x) => x.eventId === "test:reg:evt2"), "meetings: seeded window readable");
-    assert(up.length >= 2 && up[0].startAt <= up[up.length - 1].startAt, "meetings: ordered by start");
-
-    // Prep link survives a re-sync; promotion fires at T-30, exactly once.
-    const prep = await m("tasks:capture", { title: "TEST prep the the vendor call", dedupeKey: key("prep1") });
-    await m("meetings:linkPrep", { eventId: "test:reg:evt1", taskId: prep.taskId });
-    seedEvents([
-      { eventId: "test:reg:evt1", title: "TEST the vendor engineer call (moved)", startAt: mNow + 25 * 60_000, endAt: mNow + 55 * 60_000 },
-    ]);
-    const relinked = (await q("meetings:upcomingMeetings", {})).find((x) => x.eventId === "test:reg:evt1");
-    assert(relinked.prepTaskId === prep.taskId && relinked.title.includes("moved"),
-      "meetings: re-sync replaces rows but keeps the prep link");
-    // Ensure an ordinary choice already occupies the head, even if the minute
-    // cron promoted prep before this manual call. Re-linking explicitly re-arms.
-    const ordinary = await m("tasks:capture", { title: "TEST ordinary morning choice", dedupeKey: key("ordinary-before-prep"), status: "today" });
-    await m("checkins:upsertCheckin", { date: todayLondon, kind: "morning", chosen: [ordinary.taskId] });
-    await m("tasks:setStatus", { id: prep.taskId, status: "waiting" });
-    await m("meetings:linkPrep", { eventId: "test:reg:evt1", taskId: prep.taskId });
-    const promo1 = JSON.parse(execFileSync("npx", ["convex", "run", "meetings:promotePrep"], { cwd: ROOT, encoding: "utf8" }));
-    const prepDoc = await q("tasks:get", { id: prep.taskId });
-    // The minute cron can win this race. Either caller produces the same state.
-    assert(Number.isInteger(promo1.promoted) && promo1.promoted >= 0 && prepDoc.status === "today" && prepDoc.urgent === true,
-      "meetings: T-30 promotes the linked prep to today+urgent");
-    assert((await q("queries:todaysPick"))?._id === prep.taskId, "meetings: prep takes the head ahead of a morning choice");
-    assert(prepDoc.waitingSince === undefined, "meetings: prep clears the previous waiting clock");
-    await m("tasks:defer", { id: prep.taskId, status: "next" });
-    const promo2 = JSON.parse(execFileSync("npx", ["convex", "run", "meetings:promotePrep"], { cwd: ROOT, encoding: "utf8" }));
-    const stillPromoted = (await q("meetings:upcomingMeetings", {})).find((x) => x.eventId === "test:reg:evt1");
-    assert(stillPromoted.prepPromotedAt !== undefined && promo2.promoted === 0,
-      "meetings: promotion fires once (demotion isn't fought)");
-
-    assert((await q("tasks:get", { id: prep.taskId })).status === "next" &&
-      (await q("queries:todaysPick"))?._id === ordinary.taskId, "meetings: deliberate later demotion is respected");
-
-    // OAuth gate open → the sync skips quietly instead of error-spamming the cron.
-    const sync = JSON.parse(execFileSync("npx", ["convex", "run", "meetings:syncGoogleCalendar"], { cwd: ROOT, encoding: "utf8" }));
-    if (sync.skipped) {
-      assert(sync.synced === 0, "meetings: sync skips quietly while the Google OAuth gate is open");
-    } else {
-      assert(typeof sync.synced === "number", "meetings: live sync ran and reported a count");
-    }
-  } finally {
-    seedEvents(realMeetings); // restore whatever was really in the window
-    await m("checkins:upsertCheckin", { date: todayLondon, kind: "morning", chosen: beforePrepMorning?.chosen ?? [] });
-  }
+  let meetingProbe = false;
+  try { execFileSync("npx", ["--no-install", "convex", "run", "testing:meetingWindowProbe", "{}"], { cwd: ROOT, encoding: "utf8" }); }
+  catch (error) { meetingProbe = String(error.stderr ?? "").includes("MEETING_PROBE_PASSED_ROLLED_BACK:14"); }
+  assert(meetingProbe, "meetings: 14 mirror/promotion probes passed with all writes rolled back");
+  const runtimeProbe = JSON.parse(execFileSync("npx", ["--no-install", "convex", "run", "testing:calendarRuntimeProbe", "{}"], { cwd: ROOT, encoding: "utf8" }));
+  assert(runtimeProbe.meetings === 2 && runtimeProbe.requests === 2 && runtimeProbe.timed, "meetings: timed pagination works in the hosted action runtime");
 
   // ── K · AI action layer (4.3) ──
   console.log("\nK · AI action layer (4.3)");

@@ -15,6 +15,8 @@
  */
 import { mutation, query, internalMutation, internalAction } from "./_generated/server";
 import { internal } from "./_generated/api";
+import type { MutationCtx, QueryCtx } from "./_generated/server";
+import { loadCalendarWindow, validateWindow, MEETING_LIMIT, type MeetingInput } from "./lib/calendar";
 import { Doc, Id } from "./_generated/dataModel";
 import { v, ConvexError } from "convex/values";
 import { requireKey } from "./lib/auth";
@@ -44,6 +46,7 @@ export const syncGoogleCalendar = internalAction({
     const tokenRes = await fetch("https://oauth2.googleapis.com/token", {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      signal: AbortSignal.timeout(15_000),
       body: new URLSearchParams({
         client_id: clientId,
         client_secret: clientSecret,
@@ -52,51 +55,15 @@ export const syncGoogleCalendar = internalAction({
       }),
     });
     if (!tokenRes.ok) {
-      // Google's error body says WHICH credential is wrong (invalid_client =
-      // id/secret; invalid_grant = refresh token) — surface it, it's not secret.
-      const body = (await tokenRes.text()).slice(0, 300);
-      throw new Error(`calendar: token refresh failed (${tokenRes.status}) — ${body}`);
+      throw new Error(`calendar: token refresh failed (${tokenRes.status})`);
     }
     const { access_token } = (await tokenRes.json()) as { access_token: string };
 
-    const now = Date.now();
-    const windowStart = now - 2 * HOUR_MS; // keep in-progress meetings visible
+    if (typeof access_token !== "string" || !access_token) throw new Error("calendar: missing access token");
+    const now = Math.floor(Date.now() / 1000) * 1000; // Google bounds ignore milliseconds.
+    const windowStart = now - 2 * HOUR_MS;
     const windowEnd = now + 48 * HOUR_MS;
-    const params = new URLSearchParams({
-      timeMin: new Date(windowStart).toISOString(),
-      timeMax: new Date(windowEnd).toISOString(),
-      singleEvents: "true",
-      orderBy: "startTime",
-      maxResults: "50",
-    });
-    const eventsRes = await fetch(
-      `https://www.googleapis.com/calendar/v3/calendars/primary/events?${params}`,
-      { headers: { Authorization: `Bearer ${access_token}` } },
-    );
-    if (!eventsRes.ok) {
-      throw new Error(`calendar: events fetch failed (${eventsRes.status})`);
-    }
-    const data = (await eventsRes.json()) as {
-      items?: Array<{
-        id: string;
-        summary?: string;
-        htmlLink?: string;
-        status?: string;
-        start?: { dateTime?: string; date?: string };
-        end?: { dateTime?: string; date?: string };
-      }>;
-    };
-
-    // Timed events only — all-day rows would sit meaninglessly on the thread.
-    const meetings = (data.items ?? [])
-      .filter((e) => e.status !== "cancelled" && e.start?.dateTime && e.end?.dateTime)
-      .map((e) => ({
-        eventId: e.id,
-        title: e.summary ?? "(untitled)",
-        startAt: Date.parse(e.start!.dateTime!),
-        endAt: Date.parse(e.end!.dateTime!),
-        url: e.htmlLink,
-      }));
+    const meetings = await loadCalendarWindow(access_token, windowStart, windowEnd);
 
     await ctx.runMutation(internal.meetings.replaceWindow, {
       windowStart,
@@ -141,8 +108,8 @@ export const calendarDiag = internalAction({
 });
 
 /**
- * Replace the sync window's rows. Prep links survive: a fresh row for an
- * eventId inherits prepTaskId/prepPromotedAt from the row it replaces.
+ * Reconcile a complete sync window by event ID. Matching row IDs and prep
+ * state survive. Missing, expired, and duplicate rows leave the rolling mirror.
  */
 export const replaceWindow = internalMutation({
   args: {
@@ -159,28 +126,45 @@ export const replaceWindow = internalMutation({
     ),
   },
   returns: v.null(),
-  handler: async (ctx, { windowStart, windowEnd, meetings }) => {
-    const now = Date.now();
-    const existing = await ctx.db
-      .query("meetings")
-      .withIndex("by_start", (q) => q.gte("startAt", windowStart).lt("startAt", windowEnd))
-      .collect();
-    const links = new Map(
-      existing.map((m) => [m.eventId, { prepTaskId: m.prepTaskId, prepPromotedAt: m.prepPromotedAt }]),
-    );
-    for (const m of existing) await ctx.db.delete(m._id);
-    for (const m of meetings) {
-      const link = links.get(m.eventId);
-      await ctx.db.insert("meetings", {
-        ...m,
-        prepTaskId: link?.prepTaskId,
-        prepPromotedAt: link?.prepPromotedAt,
-        updatedAt: now,
-      });
-    }
-    return null;
-  },
+  handler: async (ctx, args) => replaceMeetingWindow(ctx, args),
 });
+
+/** Complete mirror reads fail explicitly beyond the supported capacity. */
+export async function readMeetingMirror(ctx: QueryCtx | MutationCtx) {
+  const rows = await ctx.db.query("meetings").withIndex("by_start").take(MEETING_LIMIT + 1);
+  if (rows.length > MEETING_LIMIT) throw new ConvexError("Calendar mirror exceeds 1000 rows. Prune old rows before syncing.");
+  return rows;
+}
+
+/** Reconcile by stable event identity, including events spanning the lower bound. */
+export async function replaceMeetingWindow(ctx: MutationCtx, args: { windowStart: number; windowEnd: number; meetings: MeetingInput[] }) {
+  validateWindow(args.windowStart, args.windowEnd, args.meetings);
+  const existing = await readMeetingMirror(ctx);
+  const kept = new Set<Id<"meetings">>();
+  const now = Date.now();
+  for (const meeting of args.meetings) {
+    const matches = existing.filter(row => row.eventId === meeting.eventId)
+      .sort((a, b) => b.updatedAt - a.updatedAt);
+    const canonical = matches[0];
+    // Earlier buggy syncs can leave a duplicate with the surviving prep link.
+    const linked = matches.find(row => row.prepTaskId !== undefined);
+    const promoted = linked ? matches.filter(row => row.prepTaskId === linked.prepTaskId && row.prepPromotedAt !== undefined)
+      .map(row => row.prepPromotedAt!) : [];
+    const row = { ...meeting, url: meeting.url, updatedAt: now,
+      prepTaskId: linked?.prepTaskId, prepPromotedAt: promoted.length ? Math.max(...promoted) : undefined };
+    if (canonical) { await ctx.db.patch(canonical._id, row); kept.add(canonical._id); }
+    else await ctx.db.insert("meetings", row);
+  }
+  // The input is a complete snapshot. Remove missing, old, and duplicate rows.
+  for (const row of existing) if (!kept.has(row._id)) await ctx.db.delete(row._id);
+  return null;
+}
+
+export async function readUpcomingMeetings(ctx: QueryCtx | MutationCtx, now: number, horizonHours: number) {
+  if (!Number.isFinite(horizonHours) || horizonHours < 0 || horizonHours > 72)
+    throw new ConvexError("Use a meeting horizon from 0 to 72 hours.");
+  return (await readMeetingMirror(ctx)).filter(row => row.endAt > now - 2 * HOUR_MS && row.startAt < now + horizonHours * HOUR_MS);
+}
 
 // ── reads + prep linking ─────────────────────────────────────────────────────
 
@@ -191,11 +175,7 @@ export const upcomingMeetings = query({
   handler: async (ctx, { apiKey, horizonHours }) => {
     requireKey(apiKey);
     const now = Date.now();
-    const horizon = now + Math.min(horizonHours ?? 36, 72) * HOUR_MS;
-    return await ctx.db
-      .query("meetings")
-      .withIndex("by_start", (q) => q.gte("startAt", now - 2 * HOUR_MS).lt("startAt", horizon))
-      .collect();
+    return await readUpcomingMeetings(ctx, now, horizonHours ?? 36);
   },
 });
 
@@ -231,8 +211,10 @@ export const linkPrep = mutation({
 export const promotePrep = internalMutation({
   args: {},
   returns: v.object({ promoted: v.number() }),
-  handler: async (ctx) => {
-    const now = Date.now();
+  handler: async (ctx) => promoteMeetingPrep(ctx, Date.now()),
+});
+
+export async function promoteMeetingPrep(ctx: MutationCtx, now: number) {
     const settings = await readSettings(ctx);
     const prepLead = (settings.caps?.meetingPrepLeadMin ?? PREP_LEAD_MS / 60_000) * 60_000;
     const soon = await ctx.db
@@ -278,5 +260,4 @@ export const promotePrep = internalMutation({
       await prependNow(ctx, date, prepOrder);
     }
     return { promoted };
-  },
-});
+}

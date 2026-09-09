@@ -14,6 +14,7 @@ import { dateString, dayRange, shiftDate, DAY_MS } from "./lib/time";
 import { resolveAreaId } from "./areas";
 import { requireKey } from "./lib/auth";
 import { readSettings, type Settings } from "./lib/settings";
+import { readUpcomingMeetings } from "./meetings";
 
 const apiKeyArg = { apiKey: v.optional(v.string()) };
 
@@ -191,10 +192,7 @@ export const brief = query({
     )
       .filter((t) => !isClosed(t))
       .sort((a, b) => a.snoozeUntil! - b.snoozeUntil!);
-    const meetings = await ctx.db
-      .query("meetings")
-      .withIndex("by_start", (q) => q.gte("startAt", now - 2 * HOUR_MS).lt("startAt", now + 36 * HOUR_MS))
-      .collect();
+    const meetings = await readUpcomingMeetings(ctx, now, 36);
     const energyRow = await ctx.db
       .query("meta")
       .withIndex("by_key", (q) => q.eq("key", "config:energy"))

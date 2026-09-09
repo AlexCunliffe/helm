@@ -172,3 +172,5 @@ npm run uninstall:claude
 Approve each restoration. Uninstall restores original files or removes files created by Helm. It keeps backups and refuses to overwrite later edits. It does not delete Convex data. It does not remove schedules that you created separately in Claude Code. Remove those schedules separately.
 
 Keep `.helm-local` until uninstall is complete. Review retained backups before deleting the clone. Backups can contain credentials.
+
+Calendar mirror checks run inside a transaction that always rolls back. They preserve existing meeting IDs, prep links, task state, settings, and check-ins. No Google account connection is needed for the isolated pagination fixtures.
