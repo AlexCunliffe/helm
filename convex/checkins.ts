@@ -6,7 +6,8 @@
  */
 import { mutation, query } from "./_generated/server";
 import { MutationCtx, QueryCtx } from "./_generated/server";
-import { v } from "convex/values";
+import { v, ConvexError } from "convex/values";
+import type { Doc } from "./_generated/dataModel";
 import { checkinKindValidator, checkinDoc } from "./validators";
 import { dateString, dayRange, shiftDate } from "./lib/time";
 import { isSnoozed } from "./lib/views";
@@ -14,6 +15,17 @@ import { requireKey } from "./lib/auth";
 import { readSettings } from "./lib/settings";
 
 const apiKeyArg = { apiKey: v.optional(v.string()) };
+const fixtureArg = { fixtureRunId: v.optional(v.string()) };
+
+// Tests must not adopt an existing user row. A normal edit clears fixture
+// ownership, so a later fixture mutation or cleanup refuses that row.
+function requireFixtureOwnership(existing: Doc<"checkins"> | null, fixtureRunId?: string) {
+  if (fixtureRunId === undefined) return;
+  if (!/^test:reg:[a-f0-9-]+:$/.test(fixtureRunId) || fixtureRunId.length > 100)
+    throw new ConvexError("Use a valid regression run identifier.");
+  if (existing && existing.fixtureRunId !== fixtureRunId)
+    throw new ConvexError("Refuse to overwrite a check-in outside this fixture run.");
+}
 
 async function findCheckin(
   ctx: QueryCtx | MutationCtx,
@@ -39,7 +51,7 @@ export const getCheckin = query({
 /** Thin upsert of a check-in row by (date, kind). Unspecified arrays are kept. */
 export const upsertCheckin = mutation({
   args: {
-    ...apiKeyArg,
+    ...apiKeyArg, ...fixtureArg,
     date: v.string(),
     kind: checkinKindValidator,
     chosen: v.optional(v.array(v.id("tasks"))),
@@ -52,7 +64,9 @@ export const upsertCheckin = mutation({
   handler: async (ctx, args) => {
     requireKey(args.apiKey);
     const existing = await findCheckin(ctx, args.date, args.kind);
+    requireFixtureOwnership(existing, args.fixtureRunId);
     const row = {
+      fixtureRunId: args.fixtureRunId,
       date: args.date,
       kind: args.kind,
       chosen: args.chosen ?? existing?.chosen ?? [],
@@ -75,14 +89,15 @@ export const upsertCheckin = mutation({
  * leads with them. Idempotent for the day.
  */
 export const chooseToday = mutation({
-  args: { ...apiKeyArg, taskIds: v.array(v.id("tasks")), date: v.optional(v.string()) },
+  args: { ...apiKeyArg, ...fixtureArg, taskIds: v.array(v.id("tasks")), date: v.optional(v.string()) },
   returns: v.id("checkins"),
-  handler: async (ctx, { apiKey, taskIds, date }) => {
+  handler: async (ctx, { apiKey, taskIds, date, fixtureRunId }) => {
     requireKey(apiKey);
     const settings = await readSettings(ctx);
     const now = Date.now();
     const day = date ?? dateString(now, settings.timezone);
     const existing = await findCheckin(ctx, day, "morning");
+    requireFixtureOwnership(existing, fixtureRunId);
     const prevChosen = existing?.chosen ?? [];
 
     // Promote the picks we can actually action; record ONLY those (a closed task
@@ -105,11 +120,11 @@ export const chooseToday = mutation({
     }
 
     if (existing) {
-      await ctx.db.patch(existing._id, { chosen: promoted });
+      await ctx.db.patch(existing._id, { chosen: promoted, fixtureRunId });
       return existing._id;
     }
     return await ctx.db.insert("checkins", {
-      date: day,
+      fixtureRunId, date: day,
       kind: "morning",
       chosen: promoted,
       completedPlanned: [],
@@ -134,16 +149,20 @@ export const chooseToday = mutation({
 async function reconcileOneDay(
   ctx: MutationCtx,
   day: string,
-  opts: { summary?: string; liveCarried: boolean; timezone: string },
+  opts: { summary?: string; liveCarried: boolean; timezone: string; fixtureRunId?: string },
 ) {
   const now = Date.now();
   const { start, end } = dayRange(day, opts.timezone);
+  const existing = await findCheckin(ctx, day, "evening");
+  requireFixtureOwnership(existing, opts.fixtureRunId);
 
   const inDay = await ctx.db
     .query("tasks")
     .withIndex("by_done", (q) => q.gte("doneAt", start).lt("doneAt", end))
     .collect();
   const done = inDay.filter((t) => t.status === "done");
+  if (opts.fixtureRunId && done.some(t => !t.dedupeKey?.startsWith(opts.fixtureRunId!)))
+    throw new ConvexError("Refuse to reconcile completions outside this fixture run.");
 
   let confirmed = 0;
   for (const t of done) {
@@ -155,8 +174,6 @@ async function reconcileOneDay(
 
   const completedPlanned = done.filter((t) => t.origin === "planned").map((t) => t._id);
   const completedAdhoc = done.filter((t) => t.origin === "adhoc").map((t) => t._id);
-
-  const existing = await findCheckin(ctx, day, "evening");
 
   // Carried = still-open tasks slated for today that didn't get done. A
   // snoozed task is deliberately parked, not a miss, so it doesn't count
@@ -173,7 +190,7 @@ async function reconcileOneDay(
     : (existing?.carried ?? []);
 
   const row = {
-    date: day,
+    fixtureRunId: opts.fixtureRunId, date: day,
     kind: "evening" as const,
     chosen: existing?.chosen ?? [],
     completedPlanned,
@@ -215,9 +232,9 @@ const reconcileReturns = v.object({
  * "here's everything you did today" + the N that carried. Idempotent.
  */
 export const reconcileDay = mutation({
-  args: { ...apiKeyArg, date: v.optional(v.string()), summary: v.optional(v.string()) },
+  args: { ...apiKeyArg, ...fixtureArg, date: v.optional(v.string()), summary: v.optional(v.string()) },
   returns: reconcileReturns,
-  handler: async (ctx, { apiKey, date, summary }) => {
+  handler: async (ctx, { apiKey, date, summary, fixtureRunId }) => {
     requireKey(apiKey);
     const settings = await readSettings(ctx);
     const now = Date.now();
@@ -225,7 +242,7 @@ export const reconcileDay = mutation({
     const { existed: _existed, ...result } = await reconcileOneDay(ctx, day, {
       summary,
       liveCarried: day === dateString(now, settings.timezone),
-      timezone: settings.timezone,
+      timezone: settings.timezone, fixtureRunId,
     });
     return result;
   },
@@ -241,7 +258,7 @@ export const reconcileDay = mutation({
  */
 export const reconcileOutstanding = mutation({
   args: {
-    ...apiKeyArg,
+    ...apiKeyArg, ...fixtureArg,
     lookbackDays: v.optional(v.number()), // default 14, capped 60
     dates: v.optional(v.array(v.string())), // explicit day list overrides the window
     summary: v.optional(v.string()), // applied to today only
@@ -250,7 +267,7 @@ export const reconcileOutstanding = mutation({
     reconciled: v.array(v.string()), // days whose evening check-in was created this run
     healed: v.number(), // provisionals confirmed across the window
   }),
-  handler: async (ctx, { apiKey, lookbackDays, dates, summary }) => {
+  handler: async (ctx, { apiKey, lookbackDays, dates, summary, fixtureRunId }) => {
     requireKey(apiKey);
     const settings = await readSettings(ctx);
     const now = Date.now();
@@ -281,7 +298,7 @@ export const reconcileOutstanding = mutation({
       const r = await reconcileOneDay(ctx, day, {
         summary: isToday ? summary : undefined,
         liveCarried: isToday,
-        timezone: settings.timezone,
+        timezone: settings.timezone, fixtureRunId,
       });
       healed += r.confirmed;
       if (!r.existed) reconciled.push(day);

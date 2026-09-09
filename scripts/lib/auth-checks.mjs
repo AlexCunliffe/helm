@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { ConvexHttpClient } from "convex/browser";
 import { makeFunctionReference } from "convex/server";
@@ -8,6 +9,7 @@ import { development } from "./dev.mjs";
  * Environment values remain in memory and are restored even after a failure. */
 export async function checkAuthentication() {
   const dev = development(), apiKey = dev.getKey();
+  const prefix = "test:auth:" + randomUUID() + ":";
   const client = new ConvexHttpClient(dev.url, { logger: false });
   const saved = {};
   for (const name of ["HELM_API_KEY", "HELM_SURFACE_TOKEN", "HELM_ALLOW_ANON", "HELM_REQUIRE_KEY"])
@@ -21,7 +23,7 @@ export async function checkAuthentication() {
   const functions = spec.functions.filter(f => f.visibility?.kind === "public" && ["Query", "Mutation", "Action"].includes(f.functionType));
   assert.ok(functions.length > 0, "public functions discovered");
   const fixture = await client.mutation(makeFunctionReference("tasks:capture"),
-    { apiKey, title: "TEST auth gate", dedupeKey: "test:auth:fixture" });
+    { apiKey, title: "TEST auth gate", dedupeKey: prefix + "fixture" });
   function example(v) {
     switch (v.type) {
       case "object": return Object.fromEntries(Object.entries(v.value).filter(([, f]) => !f.optional).map(([k,f]) => [k,example(f.fieldType)]));
@@ -39,7 +41,7 @@ export async function checkAuthentication() {
   const cases = functions.map(f => {
     assert.ok(f.args.value.apiKey, `${f.identifier} declares apiKey`);
     const args = example(f.args);
-    if (f.args.value.dedupeKey) args.dedupeKey = "test:auth:" + f.identifier;
+    if (f.args.value.dedupeKey) args.dedupeKey = prefix + f.identifier;
     if (f.args.value.date) args.date = "1900-01-01";
     if (f.args.value.key) args.key = "test-auth-area";
     return { name: f.identifier.replace(/\.js:/, ":"), kind: f.functionType.toLowerCase(), args };
@@ -80,7 +82,7 @@ export async function checkAuthentication() {
     const failures = [];
     for (const action of [() => dev.cli(["env", "remove", "HELM_ALLOW_ANON"]),
       ...["HELM_API_KEY", "HELM_SURFACE_TOKEN", "HELM_REQUIRE_KEY", "HELM_ALLOW_ANON"].map(name => () => restore(name)),
-      () => dev.cli(["run", "testing:purgeTestData", JSON.stringify({prefix:"test:auth:",dates:["1900-01-01"]})])]) {
+      () => dev.cli(["run", "testing:purgeTestData", JSON.stringify({prefix,dates:[]})])]) {
       try { action(); } catch { failures.push("restore"); }
     }
     if (failures.length) throw new Error("Auth-test restoration failed. Check the development credentials and ensure HELM_ALLOW_ANON is disabled.");

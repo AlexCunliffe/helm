@@ -125,7 +125,7 @@ Run the development regression suite:
 npm test
 ```
 
-Wait for the backend checks and both hook suites to pass. Tests create temporary development fixtures and remove them. They also temporarily change development settings and authentication variables, then restore them. Do not use this suite against a deployment that other people depend on. With no Anthropic key, the suite checks missing-key behavior and skips live AI assertions. Node.js 20 skips the live WebSocket assertion.
+Wait for the backend checks and both hook suites to pass. Tests create temporary development fixtures and remove them. Each run uses its own task namespace and dates checked to be empty. Check-in cleanup requires a matching fixture owner and exact snapshots of rows created by that run. It refuses later changes. Tests also temporarily change development settings and authentication variables, then restore them. Stop other clients during the suite. Use a separate development project if other people depend on the deployment. With no Anthropic key, the suite checks missing-key behavior and skips live AI assertions. Node.js 20 skips the live WebSocket assertion.
 
 Run the MCP contract checks:
 

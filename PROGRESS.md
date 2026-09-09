@@ -315,3 +315,15 @@ Goal: review the committed codebase with fresh reviewers in seven dimensions. Ve
 Checks: security and auth; Convex correctness; data model; MCP, skills, and hook contracts; installation; privacy including history; documentation accuracy. Every finding must cite a file and line. Reviewers report findings without fixing them. Production commands and real user-global writes remain prohibited. Destructive or configuration-changing command checks use the approved development deployment and scratch homes only.
 
 Done criteria: publish the verified finding table, fix every confirmed or plausible major and minor issue, rerun affected tests, and repeat any dimension with a major finding until none remains.
+
+## QC repair 1 plan: preserve development check-ins
+
+Finding: ROOT-02. Replace date-wide fixture cleanup with exact owned-row snapshots. Use a unique task namespace for each run. Select dates only after checking that they contain no check-ins or completions. Refuse cleanup if a recorded check-in changed. Remove the auth suite's unnecessary date deletion.
+
+Validation: deploy to the selected development deployment, run the full regression and hook suites, and verify that date-wide and stale-snapshot cleanup both fail without deleting their fixtures. No production or global configuration changes.
+
+The independent repair verifier found an ownership race in the first draft. The final design tags fixture-owned check-ins, rejects attempts to adopt an existing user row, clears ownership on normal edits, and requires matching ownership plus a full snapshot for cleanup. Fixture reconciliation also rejects unrelated completions. The same preservation group fixes CODE-001: restoration explicitly clears every cap introduced by the test before restoring the saved overrides in one mutation.
+
+QC repair 1 complete (ROOT-02 and CODE-001): regression-owned check-ins cannot adopt user records, normal edits revoke fixture ownership, cleanup rejects changed snapshots, and test-added caps are cleared during restoration. The exact UUID-scoped hook fixture namespace is accepted by cleanup. The one failed synthetic hook fixture and its scratch directory were removed after that compatibility check.
+
+Validation: independent verifier passed 16 ownership/race/restoration assertions; TypeScript passed; development push passed; full suite passed 204 assertions and both hook suites, including cleanup. The full baseline QC ledger is in [docs/qc/2026-09-09-review.md](docs/qc/2026-09-09-review.md). Remaining confirmed findings stay open there.

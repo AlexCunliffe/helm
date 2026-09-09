@@ -35,7 +35,7 @@ Task indexes are `by_status`, `by_area`, `by_waiting` (`status`, `waitingSince`)
 
 ## Check-ins
 
-`checkins` contains `date`, `kind`, `chosen`, `completedPlanned`, `completedAdhoc`, and `carried`. The four task collections contain task IDs. `summary` is optional. `kind` is `morning` or `evening`. `date` is a `YYYY-MM-DD` calendar date interpreted in the configured timezone. The index is `by_date`.
+`checkins` contains `date`, `kind`, `chosen`, `completedPlanned`, `completedAdhoc`, and `carried`. The four task collections contain task IDs. `summary` is optional. The optional `fixtureRunId` marks regression-owned rows. Normal check-in writes clear it. Tests refuse existing rows owned by anyone else, and cleanup checks both ownership and the exact saved snapshot. `kind` is `morning` or `evening`. `date` is a `YYYY-MM-DD` calendar date interpreted in the configured timezone. The index is `by_date`.
 
 ## Meetings
 

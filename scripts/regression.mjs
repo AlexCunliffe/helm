@@ -6,9 +6,9 @@
  * from .env.local), the same brain the MCP talks to. Design rules:
  *
  *  - Every task fixture carries a dedupeKey under PREFIX; check-in fixtures
- *    pin to SAFE_DATE (a pre-Helm date). `testing:purgeTestData` (internal,
- *    admin-only via `npx convex run`) deletes exactly that footprint before
- *    and after the run — including after failures.
+ *    use dates checked to have no check-ins or completions before this run.
+ *    Cleanup uses the run's task namespace and exact snapshots of check-ins
+ *    created by its own mutations. It never deletes every row on a date.
  *  - Assertions are DELTA-based or property-based, never absolute counts, so
  *    real data in dev can't flake them. Fixtures are visible on live surfaces
  *    for the seconds the suite runs; that's accepted (dev-first, docs/CLAUDE).
@@ -43,13 +43,11 @@ function execFileSync(command, args, options = {}) {
   if (args.includes("env") && getAt >= 0 && /(?:KEY|TOKEN)$/.test(args[getAt + 1]) && String(result).trim()) secretValues.add(String(result).trim());
   return result;
 }
-const PREFIX = "test:reg:";
+const PREFIX = "test:reg:" + randomUUID() + ":";
+const ownedCheckins = new Map();
 let testAreas;
 const extraFixtureAreas=[];
-const SAFE_DATE = "2026-01-15"; // pre-Helm London day — no real data can live here
-const SAFE_NOON = Date.UTC(2026, 0, 15, 12); // London == UTC in January
-const SAFE_DATE2 = "2026-01-20"; // second pre-Helm day for the H5 healing tests
-const SAFE_NOON2 = Date.UTC(2026, 0, 20, 12);
+let SAFE_DATE, SAFE_DATE2, SAFE_NOON, SAFE_NOON2;
 
 // ── plumbing ─────────────────────────────────────────────────────────────────
 
@@ -70,16 +68,48 @@ try {
 } catch { /* unset → calls go keyless; enforcement section skips */ }
 const withKey = (args) => (API_KEY ? { apiKey: API_KEY, ...args } : args);
 const q = (name, args = {}) => client.query(makeFunctionReference(name), withKey(args));
-const m = (name, args = {}) => client.mutation(makeFunctionReference(name), withKey(args));
+const m = async (name, args = {}) => {
+  const fixtureCall = name.startsWith("checkins:") && (args.date === SAFE_DATE || args.date === SAFE_DATE2 || args.dates?.some(date => date === SAFE_DATE || date === SAFE_DATE2));
+  const result = await client.mutation(makeFunctionReference(name), withKey({ ...args, ...(fixtureCall ? { fixtureRunId: PREFIX } : {}) }));
+  if (fixtureCall) {
+    for (const date of [SAFE_DATE, SAFE_DATE2]) for (const kind of ["morning", "evening"]) {
+      const row = await q("checkins:getCheckin", { date, kind });
+      if (row?.fixtureRunId === PREFIX) ownedCheckins.set(row._id, row);
+    }
+  }
+  return result;
+};
+
+async function selectFixtureDates() {
+  // Empty is observed, never inferred from age. The suite requires exclusive
+  // development use. Test timestamps follow the configured timezone.
+  for (let attempt = 0; attempt < 30; attempt++) {
+    const year = 1973 + Math.floor(Math.random() * 28);
+    const day = 1 + Math.floor(Math.random() * 13);
+    const dates = [day, day + 15].map(d => `${year}-01-${String(d).padStart(2, "0")}`);
+    let empty = true;
+    for (const date of dates) {
+      for (const kind of ["morning", "evening"]) if (await q("checkins:getCheckin", { date, kind })) empty = false;
+      if ((await q("queries:dayLog", { date })).counts.total) empty = false;
+    }
+    if (!empty) continue;
+    [SAFE_DATE, SAFE_DATE2] = dates;
+    const settings = await q("settings:get");
+    const ranges = JSON.parse(execFileSync("npx", ["convex", "run", "testing:calendarRanges", JSON.stringify({ cases: dates.map(date => ({ date, timezone: settings.timezone })) })], { encoding: "utf8" }));
+    [SAFE_NOON, SAFE_NOON2] = ranges.map(({ start, end }) => start + Math.floor((end - start) / 2));
+    return;
+  }
+  throw new Error("Cannot find empty fixture dates. Use a separate development project for the suite.");
+}
 
 function purge() {
   const out = execFileSync(
     "npx",
-    ["convex", "run", "testing:purgeTestData", JSON.stringify({ prefix: PREFIX, dates: [SAFE_DATE, SAFE_DATE2] })],
+    ["convex", "run", "testing:purgeTestData", JSON.stringify({ prefix: PREFIX, checkinSnapshots: [...ownedCheckins.values()] })],
     { cwd: ROOT, encoding: "utf8" },
   );
   const ingest=JSON.parse(execFileSync("npx",["convex","run","testing:purgeTestData",JSON.stringify({prefix:"ingest:"+PREFIX,dates:[]})],{cwd:ROOT,encoding:"utf8"}));
-  const result=JSON.parse(out);return {...result,tasks:result.tasks+ingest.tasks};
+  const result=JSON.parse(out);ownedCheckins.clear();return {...result,tasks:result.tasks+ingest.tasks};
 }
 
 let passed = 0;
@@ -107,7 +137,8 @@ const key = (s) => `${PREFIX}${s}`;
 
 async function main() {
   console.log(`regression → ${CONVEX_URL}`);
-  purge(); // clear any residue from a previous failed run
+  await selectFixtureDates();
+  purge(); // this run owns a unique namespace; no earlier run is deleted
   const liveAreas = await q("areas:listAreas");
   if (!liveAreas.length) throw new Error("Seed at least one area before running tests.");
   if (liveAreas.length === 1) {
@@ -371,6 +402,11 @@ async function main() {
     "reconcileDay: counts ≡ dayLog for the same day");
   assert(typeof fRec.confirmed === "number", "reconcileDay: reports confirmed provisionals");
   const fEvening = await q("checkins:getCheckin", { date: SAFE_DATE, kind: "evening" });
+  await throws(async () => execFileSync("npx", ["convex", "run", "testing:purgeTestData", JSON.stringify({ prefix: PREFIX + "guard:", dates: [SAFE_DATE] })], { encoding: "utf8" }), "purge: refuses date-wide check-in deletion");
+  await throws(async () => execFileSync("npx", ["convex", "run", "testing:purgeTestData", JSON.stringify({ prefix: PREFIX, checkinSnapshots: [{ ...fEvening, summary: "stale fixture snapshot" }] })], { encoding: "utf8" }), "purge: refuses a check-in changed since its snapshot");
+  assert((await q("checkins:getCheckin", { date: SAFE_DATE, kind: "evening" }))._id === fEvening._id, "purge: rejected cleanup preserves the check-in");
+  await throws(async () => execFileSync("npx", ["convex", "run", "testing:purgeTestData", JSON.stringify({ prefix: PREFIX + "foreign:", checkinSnapshots: [fEvening] })], { encoding: "utf8" }), "purge: refuses another run's owned row");
+  await throws(() => client.mutation(makeFunctionReference("checkins:chooseToday"), withKey({ date: SAFE_DATE, taskIds: [], fixtureRunId: "test:reg:" + randomUUID() + ":" })), "checkins: another test run cannot adopt this row");
   assert(fEvening !== null && fEvening.kind === "evening", "reconcileDay: evening check-in written");
 
   // ── F2 · self-healing reconcile (H5) ──
@@ -925,7 +961,7 @@ async function main() {
       "settings: optional overrides can be removed");
   } finally {
     await m("settings:update", { patch: {
-      ...settingsBefore, caps: settingsBefore.caps ?? null,
+      ...settingsBefore, caps: { today: null, waiting: null, newToday: null, focusMinutes: null, ...settingsBefore.caps },
       workday: { ...settingsBefore.workday, eveningWatchFrom: settingsBefore.workday.eveningWatchFrom ?? null },
     }});
   }

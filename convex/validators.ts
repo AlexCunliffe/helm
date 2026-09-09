@@ -139,6 +139,7 @@ export const projectFields = {
 };
 
 export const checkinFields = {
+  fixtureRunId: v.optional(v.string()), // regression ownership; normal writes clear it
   date: v.string(), // "2026-06-24" (Europe/London)
   kind: checkinKindValidator,
   chosen: v.array(v.id("tasks")),
