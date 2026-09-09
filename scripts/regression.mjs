@@ -24,6 +24,8 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { ConvexHttpClient } from "convex/browser";
 import { makeFunctionReference } from "convex/server";
+import { development } from "./lib/dev.mjs";
+import { AREA_PRESETS, validateAreas } from "./lib/areas.mjs";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), "..");
 const PREFIX = "test:reg:";
@@ -930,6 +932,26 @@ async function main() {
       `time: ${calendarCases[i].timezone} ${calendarCases[i].date} spans ${hours} hours`);
   }
   assert(ranges[4].start === Date.UTC(2026, 0, 14, 18, 15), "time: fractional offset opens on the correct UTC date");
+
+  // ── T · area seed: empty-store probe rolls back the whole transaction ──
+  console.log("\nT · area seed");
+  const originalAreas = await q("areas:listAreas", { includeArchived: true });
+  const dev = development();
+  for (const [preset, areas] of Object.entries(AREA_PRESETS)) {
+    validateAreas(areas);
+    let passedProbe = false;
+    try {
+      execFileSync("npx", ["--no-install", "convex", "run", "testing:seedEmptyProbe", JSON.stringify({ areas }), "--env-file", dev.envFile],
+        { cwd: ROOT, env: dev.env, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+    } catch (e) { passedProbe = String(e.stderr ?? "").includes("SEED_PROBE_PASSED_ROLLED_BACK"); }
+    assert(passedProbe, `seed: ${preset} empty-store insert and idempotent repeat observed`);
+  }
+  assert(JSON.stringify(await q("areas:listAreas", { includeArchived: true })) === JSON.stringify(originalAreas),
+    "seed: rollback preserves existing area IDs and values");
+  const noSeed = await m("areas:seedAreas", { areas: AREA_PRESETS.generic, onlyIfEmpty: true });
+  assert(noSeed.inserted === 0 && noSeed.updated === 0, "seed: existing area set is untouched");
+  await throws(() => m("areas:seedAreas", { areas: [AREA_PRESETS.generic[0], AREA_PRESETS.generic[0]] }), "seed: duplicate keys rejected");
+  await throws(() => m("areas:seedAreas", { areas: [{ ...AREA_PRESETS.generic[0], color: "red" }] }), "seed: invalid colors rejected");
 
   // ── G · janitor proves itself ──
   console.log("\nG · purge");

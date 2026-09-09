@@ -3,9 +3,9 @@
  * adding/renaming a function is an `upsertArea` row, never a migration (docs/09).
  */
 import { mutation, query } from "./_generated/server";
-import { QueryCtx } from "./_generated/server";
+import { MutationCtx, QueryCtx } from "./_generated/server";
 import { Id } from "./_generated/dataModel";
-import { v } from "convex/values";
+import { v, ConvexError } from "convex/values";
 import { areaDoc } from "./validators";
 import { requireKey } from "./lib/auth";
 
@@ -53,6 +53,7 @@ export async function defaultAreaId(ctx: QueryCtx): Promise<Id<"areas">> {
 export const seedAreas = mutation({
   args: {
     ...apiKeyArg,
+    onlyIfEmpty: v.optional(v.boolean()),
     areas: v.array(
       v.object({
         key: v.string(),
@@ -64,26 +65,31 @@ export const seedAreas = mutation({
     ),
   },
   returns: v.object({ inserted: v.number(), updated: v.number() }),
-  handler: async (ctx, { apiKey, areas }) => {
+  handler: async (ctx, { apiKey, areas, onlyIfEmpty }) => {
     requireKey(apiKey);
-    let inserted = 0;
-    let updated = 0;
-    for (const a of areas) {
-      const existing = await ctx.db
-        .query("areas")
-        .withIndex("by_key", (q) => q.eq("key", a.key))
-        .unique();
-      if (existing) {
-        await ctx.db.patch(existing._id, a);
-        updated++;
-      } else {
-        await ctx.db.insert("areas", a);
-        inserted++;
-      }
-    }
-    return { inserted, updated };
+    return await seedAreaRows(ctx, areas, onlyIfEmpty ?? false);
   },
 });
+
+export async function seedAreaRows(ctx: MutationCtx, areas: Array<{ key: string; label: string; color: string; order: number; vaultDomain?: string }>, onlyIfEmpty: boolean) {
+  if (!areas.length || areas.length > 100) throw new ConvexError("Use 1 to 100 areas.");
+  const keys = new Set<string>();
+  for (const a of areas) {
+    if (!/^[a-z][a-z0-9_-]{0,63}$/.test(a.key) || keys.has(a.key)) throw new ConvexError("Use distinct lowercase area keys.");
+    keys.add(a.key);
+    if (!a.label.trim() || a.label.length > 120 || !/^#[0-9a-f]{6}$/i.test(a.color) ||
+        !Number.isSafeInteger(a.order) || a.order < 0 || a.order > 10000 || (a.vaultDomain?.length ?? 0) > 200)
+      throw new ConvexError("Invalid area label, color, order, or vaultDomain.");
+  }
+  if (onlyIfEmpty && await ctx.db.query("areas").withIndex("by_key").first()) return { inserted: 0, updated: 0 };
+  let inserted = 0, updated = 0;
+  for (const a of areas) {
+    const existing = await ctx.db.query("areas").withIndex("by_key", q => q.eq("key", a.key)).unique();
+    if (existing) { await ctx.db.patch(existing._id, a); updated++; }
+    else { await ctx.db.insert("areas", a); inserted++; }
+  }
+  return { inserted, updated };
+}
 
 /** Upsert a single area by key (add/rename/recolour a function). */
 export const upsertArea = mutation({

@@ -10,7 +10,8 @@
     "test": "node scripts/regression.mjs",
     "glass:embed": "node scripts/embed-glass.mjs",
     "oss:lint": "node scripts/oss-lint.mjs",
-    "test:mcp": "node mcp/test-client.mjs"
+    "test:mcp": "node mcp/test-client.mjs",
+    "seed": "node scripts/seed.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.110.0",

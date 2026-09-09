@@ -115,3 +115,19 @@ Files: seed CLI, area presets, backend seed guard, and development fixtures.
 Checks: validate presets and custom input; test an empty-store seed and repeat inside a rollback-only development transaction; confirm existing IDs and labels survive; run CLI dry-run and normal repeat; run the full regression harness.
 
 Done criteria: an empty store gets the chosen palette and a repeat never overwrites an existing set. The fresh-clone acceptance stage will exercise the same command before any areas exist.
+
+### Slice 4 result
+
+Completed. TypeScript and the development push pass. All 182 regression checks pass. Both palettes seeded the empty-store transaction correctly; a repeated seed preserved the labels and palette. The transaction rolled back, preserving existing area IDs and values. CLI help, dry-run, and a normal repeat all ran successfully. Existing area sets are left unchanged. Duplicate keys and invalid colors are rejected.
+
+## Stage 3 · Slice 5 plan: settings panel
+
+Goal: edit every settings section and manage areas from the web interface. Apply time changes live. Keep credential changes in the terminal.
+
+Files: web interface, embedded page, nullable cap patches, area validation, and regression fixtures.
+
+Checks: edit workday in the panel; observe geometry without reload; edit timezone through MCP and reopen the panel; save and clear a cap; add, rename, recolor, and retire an area; preserve in-progress form edits; reject invalid area data; inspect desktop and mobile layouts; run the full development regression.
+
+The plan conflicts on key rotation: it limits secrets to CLI changes while requesting a browser rotation action. A clarification was requested. The conservative implementation shows the exact CLI command from the panel and does not grant the browser deployment-admin access.
+
+Done criteria: the settings and area forms persist through their validated APIs and the interface follows the live settings.
