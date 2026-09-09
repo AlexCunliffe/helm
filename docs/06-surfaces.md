@@ -1,16 +1,18 @@
-# 06 · Surfaces (it comes to you)
+# 06 · Surfaces
 
-All read-mostly. All read the **same stable API**, so adding a surface never touches the brain.
+The glass is the implemented web interface. Convex serves it at `/glass`. It subscribes to the same brain used by MCP and permits task edits with the API key. Settings changes update the workday geometry and display limits. The browser clock uses the configured timezone.
 
-## v1 / planned
-- **Slack brief & nudges** (via Claude Tag + a fixed-time scheduled message) — morning brief, ageing nudges, evening reconcile. Mobile by default (Slack app), so it works AFK.
-- **iPhone widget** — Scriptable widget hitting `GET /brief` (token). Top 3 + streak + waiting count. Read-only, glanceable.
-- **Desk screen** — a spare tablet / e-ink / Pi pointing at `GET /brief` (a kiosk HTML view). "Focus now / next / N waiting."
-- **Web pane (optional)** — a focused dashboard, only if the briefs aren't enough. Host on a subdomain the user already owns, not a new domain.
+The page presents a current task, a day thread, waiting and upcoming work, recent captures, and completion history. Focus, snooze, completion, merge, connection, and delegation controls write through validated backend functions. The Settings panel edits preferences and areas. Its rotation action shows a terminal command.
 
-## Add-a-surface recipe (scalability)
-1. Consume `GET /brief` (or a new read query) — never write from a glass surface.
-2. Render. Done. No schema or brain change.
+Read-only widgets can consume `GET /brief` with the surface token. A phone widget, desk screen, Slack delivery, or another client is a separate integration; none is installed by this repository. External delivery requires the owner's authorization and scheduling setup.
 
-## Fixed-time delivery
-Claude Tag pushes "when it thinks you need to know"; for an 08:00-sharp ritual, back it with a trivial scheduled message. Belt and braces.
+## Add a surface
+
+1. Choose the minimum API access the surface needs.
+2. Read the existing brief or another supported query.
+3. Render the result.
+4. Keep the credential out of URLs.
+
+A read-only surface should use the HTTP brief. The surface token also permits bounded ingest proposals, so it must still be protected. An editing client requires the more powerful API key. Read [security](security.md).
+
+The interface preserves source links and short re-entry context. Deferral is an ordinary choice. Completed unplanned work belongs in the daily record alongside planned work.

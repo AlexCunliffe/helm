@@ -299,3 +299,19 @@ Files: README.md; docs/install.md, configure.md, sources.md, deploy.md; a wizard
 Checks: read all design documents for meaning and privacy; compare paths, fields, functions, and defaults with code; run documented development and scratch-home commands; inspect the wizard preview; verify links; run the external denylist.
 
 Production and real global installation commands are documentation-only until the deployment owner approves them. This preserves the explicit production and global-configuration gates. Record those exceptions instead of executing forbidden commands to satisfy a documentation check.
+
+### Stage 4 result
+
+Completed. README now contains the six-line quickstart and points to the full installation path. The configuration guide covers every settings field and area rules. Source documentation includes validated email and calendar examples. Production instructions distinguish project selection, deployment, fresh credentials, data configuration, and client migration.
+
+All design documents 01 through 12 were read for privacy and meaning. Outdated query-string tokens, planned-only descriptions of implemented features, automatic-send examples, and assumptions about a particular vault were removed. The schema reference now includes meetings, settings, completion timing, review, and relationship fields. Two screenshots show real wizard dry-run output with generic answers and the deployment identifier hidden. Both were visually inspected.
+
+The documented clone, dependency installs, development push and reconfiguration, interactive wizard, saved-answer flow, seed, credential read, and embed commands were exercised. Installation, drift checks, and uninstall were exercised through their documented npm commands in a scratch home. All local Markdown links resolve. Source JSON examples pass deployment validation. Development settings and areas were restored after these checks. Production commands remain deliberately unexecuted under the owner's gate. Actual conversational Claude execution still depends on an authenticated client; the registered MCP brief call passed.
+
+## Stage 5 plan: independent quality review
+
+Goal: review the committed codebase with fresh reviewers in seven dimensions. Verify every finding independently. Apply the installed code-review and security-review procedures to the diff since the initial import.
+
+Checks: security and auth; Convex correctness; data model; MCP, skills, and hook contracts; installation; privacy including history; documentation accuracy. Every finding must cite a file and line. Reviewers report findings without fixing them. Production commands and real user-global writes remain prohibited. Destructive or configuration-changing command checks use the approved development deployment and scratch homes only.
+
+Done criteria: publish the verified finding table, fix every confirmed or plausible major and minor issue, rerun affected tests, and repeat any dimension with a major finding until none remains.

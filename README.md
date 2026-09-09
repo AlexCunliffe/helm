@@ -2,33 +2,37 @@
 
 > Reference implementation, maintained on the author's own schedule.
 
-Helm is a personal task and accountability system. It captures commitments, shows the next action, and records completed work. Claude Code, an MCP server, and a Convex web interface share one task store.
+Helm is a personal task and accountability system. It captures commitments, shows the next action, and records completed work. Claude Code, an MCP server, and a Convex web interface share your own task store.
 
 ## The three doors
 
 - **Capture:** record an intent with little manual input.
 - **Surface:** show the next action in a short brief.
-- **Resume:** carry a source link and current context with each task.
+- **Resume:** keep the source link and current context with the task.
 
 ```text
 Claude Code + skills ── MCP ──┐
-Optional session hook ────────┼── Convex task store ── linked knowledge vault
+Optional session hook ────────┼── Your Convex project ── linked knowledge vault
 Web interface ───────────────┤
 Token HTTP clients ──────────┘
 ```
 
 ## Quickstart
 
-The installation tools are under development. The target flow is:
+Use Node.js 20 or later, a Convex account, and an authenticated Claude Code installation. Use macOS, Linux, or WSL. Each installation creates its own Convex project.
 
-1. Install Node.js 20 or later.
-2. Clone this repository.
-3. Install the repository and MCP dependencies.
-4. Create a new Convex development project.
-5. Configure Helm and install its Claude Code integration.
-6. Run the tests before opening a brief.
+```sh
+git clone https://github.com/AlexCunliffe/helm.git helm-oss
+cd helm-oss
+npm install
+npm install --prefix mcp
+npx convex dev --once
+npm run setup
+```
 
-The completed procedure will be in [docs/install.md](docs/install.md). Current implementation status is in [PROGRESS.md](PROGRESS.md).
+Follow [the installation guide](docs/install.md) to select a cloud development deployment, approve the Claude integration, run the checks, and open `/brief`. The guide also covers browser access and uninstall.
+
+Read [configuration](docs/configure.md), [capture sources](docs/sources.md), [security](docs/security.md), and [deployment](docs/deploy.md). See [PROGRESS.md](PROGRESS.md) for observed checks and remaining release gates. Server-side AI is optional and requires your own Anthropic API key.
 
 ## Licence and support
 

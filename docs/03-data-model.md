@@ -1,103 +1,52 @@
-# 03 · Data model (Convex)
+# 03 · Data model
 
-Principle: **user-facing categories that change often = tables** (add a row, no migration). **Developer enums that change rarely = unions** (a one-line additive edit). See `docs/09`.
+The authoritative field validators are in [convex/validators.ts](../convex/validators.ts). Table definitions and indexes are in [convex/schema.ts](../convex/schema.ts). Every document also has Convex `_id` and `_creationTime` fields.
 
-## Tables
+User-facing categories are rows. Developer enums are additive unions. See [schema evolution](09-scalability.md).
 
-### `areas` — the brain's categories (data-driven, extensible)
-```ts
-areas: defineTable({
-  key: v.string(),        // "finance" — stable slug used by clients
-  label: v.string(),      // "Finance"
-  color: v.string(),      // hex for surfaces
-  vaultDomain: v.optional(v.string()), // e.g. "50-commercial" — bridge to a second-brain domain
-  order: v.number(),
-  archived: v.optional(v.boolean()),
-}).index("by_key", ["key"])
-```
-Generic default set: work, finance, people, admin, home, personal. Adding/renaming a function later = insert/edit a row. Nothing else changes.
+## Areas
 
-### `tasks` — the core
-```ts
-tasks: defineTable({
-  title: v.string(),
-  note: v.optional(v.string()),
-  areaId: v.id("areas"),
-  projectId: v.optional(v.id("projects")),
+`areas` contains `key`, `label`, `color`, and `order`. `vaultDomain` and `archived` are optional. The `by_key` index resolves a stable slug to an area ID. Renaming a label does not change task references. Retirement preserves existing tasks. The generic set is work, finance, people, admin, home, and personal.
 
-  status: v.union(/* "inbox","today","next","waiting","someday","done","dropped" */),
-  origin: v.union(v.literal("planned"), v.literal("adhoc")), // adhoc = unplanned, logged after the fact
-  size: v.optional(v.union(v.literal("xs"), v.literal("m"), v.literal("l"))), // 2-min / focus / deep
-  urgent: v.optional(v.boolean()),
+## Tasks
 
-  source: v.string(),     // "claude"|"slack"|"email"|"calendar"|"granola"|"manual"|future — free, registry-documented
-  sourceRef: v.optional(v.object({
-    url: v.optional(v.string()),
-    threadId: v.optional(v.string()),
-    label: v.optional(v.string()),
-  })),
-  contextLine: v.optional(v.string()),   // Claude-written "where this is at" — kills re-entry cost
-  kickoffPrompt: v.optional(v.string()), // ready-to-run instruction to execute it (docs/07)
-  vaultRef: v.optional(v.string()),      // relative path/slug to a second-brain note (docs/08)
+| Group | Fields |
+| --- | --- |
+| Identity and content | `title`, optional `note`, required `areaId`, optional `projectId` |
+| Lifecycle | `status`, `origin`, optional `size`, optional `urgent` |
+| Provenance | `source`, optional `sourceRef`, `dedupeKey`, `dedupeAliases` |
+| Re-entry | Optional `contextLine`, `kickoffPrompt`, `vaultRef` |
+| Waiting and scheduling | Optional `waitingOn`, `waitingSince`, `snoozeUntil`, `wokeAt`, `dueAt` |
+| Work and completion | Optional `startedAt`, `doneAt`, `completionNote`, `provisional` |
+| Review and maintenance | Optional `needsReview`, required `updatedAt` |
+| Relationships | Optional `links`, `mergedInto`, `mergedFrom` |
 
-  waitingOn: v.optional(v.string()),
-  waitingSince: v.optional(v.number()),
-  snoozeUntil: v.optional(v.number()),
-  dueAt: v.optional(v.number()),
-  doneAt: v.optional(v.number()),
+Statuses are `inbox`, `today`, `next`, `waiting`, `someday`, `done`, and `dropped`. Capture accepts only the first five. Completion operations set `doneAt`. `origin` is `planned` or `adhoc`. `size` is `xs`, `m`, or `l`.
 
-  needsReview: v.optional(v.boolean()),  // proposed by the sweep, awaiting one-tap confirm
-  dedupeKey: v.optional(v.string()),     // idempotent capture
-  updatedAt: v.number(),
+`source` is a free string. Common sources include `manual`, `claude`, `claude-hook`, `ingest`, and configured connector keys. A `sourceRef` can have `url`, `threadId`, and `label`. Adding a source needs no enum migration.
 
-  // merge + connect (Phase 5, docs/03-data-model.md)
-  links: v.optional(v.array(v.id("tasks"))),   // connect: symmetric adjacency (clusters = connected components)
-  mergedInto: v.optional(v.id("tasks")),       // set on a merged-away (dropped) source — traceable, not lost
-  mergedFrom: v.optional(v.array(v.object({    // provenance of everything folded into this task
-    title: v.string(),
-    sourceRef: v.optional(sourceRef),
-    dedupeKey: v.optional(v.string()),
-  }))),
-  dedupeAliases: v.optional(v.array(v.string())), // re-sweep-safe merge (docs/03-data-model.md)
-})
-  .index("by_status", ["status"])
-  .index("by_area", ["areaId"])
-  .index("by_waiting", ["status", "waitingSince"])
-  .index("by_done", ["doneAt"])
-  .index("by_snooze", ["snoozeUntil"])
-  .index("by_dedupe", ["dedupeKey"])
-  .index("by_review", ["needsReview"])
-```
+`links` contains task IDs for symmetric connections. A merged-away row is dropped and points to its survivor through `mergedInto`. `mergedFrom` preserves each source's title, optional source reference, and optional dedupe key. `dedupeAliases` preserves additional provenance. Full MCP capture follows merge pointers; restricted HTTP ingest does not.
 
-### `projects`
-```ts
-projects: defineTable({
-  name: v.string(),
-  areaId: v.id("areas"),
-  status: v.union(v.literal("active"), v.literal("paused"), v.literal("done")),
-  note: v.optional(v.string()),
-  vaultRef: v.optional(v.string()),      // → 90-projects/<slug>.md
-}).index("by_status", ["status"])
-```
+Task indexes are `by_status`, `by_area`, `by_waiting` (`status`, `waitingSince`), `by_done`, `by_snooze`, `by_dedupe`, and `by_review`.
 
-### `checkins` — accountability log
-```ts
-checkins: defineTable({
-  date: v.string(),                      // "2026-06-24" (Europe/London)
-  kind: v.union(v.literal("morning"), v.literal("evening")),
-  chosen: v.array(v.id("tasks")),        // today's 3
-  completedPlanned: v.array(v.id("tasks")),
-  completedAdhoc: v.array(v.id("tasks")),
-  carried: v.array(v.id("tasks")),
-  summary: v.optional(v.string()),
-}).index("by_date", ["date"])
-```
+## Projects
 
-### `meta` — singletons (watermarks, config)
-```ts
-meta: defineTable({ key: v.string(), value: v.any() }).index("by_key", ["key"])
-// e.g. key:"sweep:email:lastAt" → timestamp (docs/05)
-```
+`projects` contains `name`, `areaId`, and `status`. `note` and `vaultRef` are optional. Status is `active`, `paused`, or `done`. The table has a `by_status` index. Project links are a data-model seam; there is no full project-management interface in this release.
 
-## The load-bearing field: `origin`
-`planned` = a forward task. `adhoc` = unplanned work captured *after* it happened (status goes straight to `done`, `doneAt` set). Same table, two directions of time. This is what makes "what did I actually do today?" answerable (`dayLog` + evening reconcile).
+## Check-ins
+
+`checkins` contains `date`, `kind`, `chosen`, `completedPlanned`, `completedAdhoc`, and `carried`. The four task collections contain task IDs. `summary` is optional. `kind` is `morning` or `evening`. `date` is a `YYYY-MM-DD` calendar date interpreted in the configured timezone. The index is `by_date`.
+
+## Meetings
+
+`meetings` contains `eventId`, `title`, `startAt`, `endAt`, and `updatedAt`. `url`, `prepTaskId`, and `prepPromotedAt` are optional. `by_start` supports the rolling calendar window. `by_event` resolves stable event IDs. Sync preserves prep links for matching event IDs.
+
+## Settings and metadata
+
+`meta` contains `key` and `value`, indexed by `by_key`. One row with `key: "settings"` stores the validated owner, context, timezone, workday, caps, sources, and hook configuration. Read [the full field reference](configure.md). The settings mutation validates updates; the generic metadata setter cannot replace this row.
+
+Other metadata includes source watermarks (`sweep:<source>:lastAt`) and legacy interface preferences. A source watermark identifies a fully processed update boundary, not a future event start.
+
+## Planned and unplanned work
+
+`planned` is a forward intention. `adhoc` is work captured after it happened. Both appear in the daily completion record. This makes the daily account include the work that displaced the original plan.

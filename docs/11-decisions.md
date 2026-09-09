@@ -16,9 +16,12 @@
 - **D14 · Effort.** Use `size` for effort. Use `startedAt` for the start time.
 - **D15 · Function authentication.** The single-user implementation uses an API key argument. The gate is closed by default. `HELM_ALLOW_ANON=1` permits anonymous access and warns on every call. The old `HELM_REQUIRE_KEY` flag has no effect.
 - **D16 · Browser client.** The embed step bundles the pinned local client into the page. The page makes no external script request. Its CSP limits data connections to the matching deployment.
-- **D17 · Merge safety.** Follow `mergedInto` pointers during dedupe lookup. Preserve source keys and merge provenance.
+- **D17 · Merge safety.** Follow `mergedInto` pointers during full task-API dedupe lookup. Restricted HTTP ingest does not follow them. Preserve source keys and merge provenance.
 
 - **D18 · Configuration.** Store owner, time, source, cap, and hook preferences in one validated settings document. The panel and MCP update the same document. Area reads are bounded to 100 rows.
 - **D19 · Secret changes.** Keep deployment environment changes in the terminal. The settings panel shows the key-rotation command and only the existing key's last four characters. It holds no deployment-admin credential.
 
 - **D20 · Session logging.** The hook is off by default. It reads preferences before transcript content. Directory inclusion is a separate opt-in. Failures are silent and shutdown is bounded.
+
+- **D21 · Claude installation.** Preview and approve each global file. Back up before writing. Stage CLI registration in a temporary home. Preserve later user edits during uninstall.
+- **D22 · Ingest boundary.** The surface token can read a brief and submit bounded proposals. Use a separate dedupe namespace. Refresh only unreviewed inbox proposals. Preserve accepted and merged work.

@@ -1,14 +1,15 @@
 # 12 · Open questions
 
-Defaults support local evaluation. Optional integrations require the user's own configuration.
+Defaults support evaluation. Optional integrations require the owner's configuration.
 
-| Question | Current position |
-|---|---|
-| Area taxonomy | Areas are editable rows. Generic seed presets are planned. |
-| Timezone and workday | Configurable settings are planned. |
-| Capture sources | Each source requires the user's own connector. |
-| Vault links | Use relative paths under `<your-vault>`. |
-| Duplicate suggestions | Manual merge and connect are available. Automatic suggestions are deferred. |
-| Production migration | The deployment owner controls migration. |
+| Choice | Current position |
+| --- | --- |
+| Area taxonomy | Editable rows; generic and classic presets are available |
+| Timezone and workday | Validated settings shared by backend, skills, and glass |
+| Capture sources | Disabled by default; each requires an authorized connector |
+| Session logging | Off by default; working-directory inclusion is a separate opt-in |
+| Vault links | Optional relative references; no automatic vault integration |
+| Duplicate suggestions | Manual merge and connection are available; automatic suggestions are deferred |
+| Production migration | The deployment owner controls selection, rotation, and client changes |
 
-There are no delivery commitments for deferred features.
+There are no delivery commitments for deferred features. Read [implementation status](10-roadmap.md) and [the current build record](../PROGRESS.md).
