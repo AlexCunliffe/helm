@@ -870,6 +870,44 @@ async function main() {
       "ai: draftFollowUp reads 'in 3 days' as a real wake delay (hours)");
   }
 
+  // Settings updates are transactional and restore the user's configuration.
+  console.log("\nR · settings document");
+  const settingsBefore = await q("settings:get");
+  assert(typeof settingsBefore.timezone === "string" && Array.isArray(settingsBefore.sources),
+    "settings: a complete document is returned");
+  try {
+    const configured = await m("settings:update", { patch: {
+      owner: { shortName: "Sam" }, timezone: "America/New_York",
+      workday: { start: "07:00", end: "17:00", days: [1, 3, 5], eveningWatchFrom: "18:00" },
+      caps: { today: 2, focusMinutes: 30 },
+      sources: [{ key: "gcal", label: "Calendar", kind: "calendar", enabled: true, mcpServer: "calendar" }],
+      hook: { logSessions: false, includeCwd: false, titleChars: 100 },
+    }});
+    assert(configured.owner.shortName === "Sam" && configured.owner.name === settingsBefore.owner.name,
+      "settings: partial owner update preserves omitted fields");
+    const reread = await q("settings:get");
+    assert(reread.timezone === "America/New_York" && reread.workday.start === "07:00"
+      && reread.caps.today === 2 && reread.sources[0].key === "gcal" && reread.hook.titleChars === 100,
+      "settings: time, caps, sources and hook round-trip");
+    for (const patch of [
+      { timezone: "Invalid/Timezone" }, { founderContext: "x".repeat(801) },
+      { workday: { start: "25:00" } }, { workday: { days: [1, 1] } },
+      { workday: { end: "06:00" } }, { caps: { today: -1 } },
+      { hook: { titleChars: 0 } }, { sources: [reread.sources[0], reread.sources[0]] },
+    ]) await throws(() => m("settings:update", { patch }), "settings: invalid " + Object.keys(patch)[0] + " rejected");
+    await throws(() => m("meta:setMeta", { key: "settings", value: {} }),
+      "settings: generic meta write cannot bypass validation");
+    assert((await q("settings:get")).timezone === "America/New_York", "settings: rejected updates preserve data");
+    const cleared = await m("settings:update", { patch: { caps: null, workday: { eveningWatchFrom: null } } });
+    assert(cleared.caps === undefined && cleared.workday.eveningWatchFrom === undefined,
+      "settings: optional overrides can be removed");
+  } finally {
+    await m("settings:update", { patch: {
+      ...settingsBefore, caps: settingsBefore.caps ?? null,
+      workday: { ...settingsBefore.workday, eveningWatchFrom: settingsBefore.workday.eveningWatchFrom ?? null },
+    }});
+  }
+
   // ── G · janitor proves itself ──
   console.log("\nG · purge");
   const purged = purge();

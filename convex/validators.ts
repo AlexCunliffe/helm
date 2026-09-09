@@ -178,3 +178,54 @@ export const taskView = v.object({
   // field. Survives re-capture (upsert patches, so `_creationTime` is kept).
   addedAt: v.number(),
 });
+
+// Settings live in one indexed meta row. The wire schema is shared by readers
+// and writers; section patches preserve fields omitted by a client.
+export const ownerFields = {
+  name: v.string(), shortName: v.string(), role: v.optional(v.string()),
+  business: v.optional(v.string()), tone: v.string(),
+};
+export const workdayFields = {
+  start: v.string(), end: v.string(), days: v.array(v.number()),
+  eveningWatchFrom: v.optional(v.string()),
+};
+export const capsFields = {
+  today: v.optional(v.number()), wins: v.optional(v.number()),
+  ageing: v.optional(v.number()), waiting: v.optional(v.number()),
+  upcoming: v.optional(v.number()), newToday: v.optional(v.number()),
+  waitingAgeingDays: v.optional(v.number()), openAgeingDays: v.optional(v.number()),
+  meetingPrepLeadMin: v.optional(v.number()), focusMinutes: v.optional(v.number()),
+};
+export const sourceValidator = v.object({
+  key: v.string(), label: v.string(),
+  kind: v.union(v.literal("email"), v.literal("chat"), v.literal("calendar"),
+    v.literal("meetings"), v.literal("tracker"), v.literal("custom")),
+  mcpServer: v.optional(v.string()), enabled: v.boolean(), notes: v.optional(v.string()),
+});
+export const hookFields = {
+  logSessions: v.boolean(), includeCwd: v.boolean(), titleChars: v.number(),
+};
+export const settingsFields = {
+  owner: v.object(ownerFields), founderContext: v.string(), timezone: v.string(),
+  workday: v.object(workdayFields), caps: v.optional(v.object(capsFields)),
+  sources: v.array(sourceValidator), hook: v.object(hookFields),
+};
+export const settingsValidator = v.object(settingsFields);
+export const settingsPatchValidator = v.object({
+  owner: v.optional(v.object({
+    name: v.optional(v.string()), shortName: v.optional(v.string()),
+    role: v.optional(v.string()), business: v.optional(v.string()), tone: v.optional(v.string()),
+  })),
+  founderContext: v.optional(v.string()), timezone: v.optional(v.string()),
+  workday: v.optional(v.object({
+    start: v.optional(v.string()), end: v.optional(v.string()),
+    days: v.optional(v.array(v.number())),
+    eveningWatchFrom: v.optional(v.union(v.string(), v.null())),
+  })),
+  caps: v.optional(v.union(v.object(capsFields), v.null())),
+  sources: v.optional(v.array(sourceValidator)),
+  hook: v.optional(v.object({
+    logSessions: v.optional(v.boolean()), includeCwd: v.optional(v.boolean()),
+    titleChars: v.optional(v.number()),
+  })),
+});

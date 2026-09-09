@@ -69,3 +69,17 @@ Files: `convex/validators.ts`, `convex/lib/settings.ts`, `convex/settings.ts`, `
 Checks: read defaults on an empty settings store; round-trip partial owner, time, caps, source, and hook updates; reject invalid settings and generic-meta bypasses; restore the prior settings; compile and run the full development harness.
 
 Done criteria: the settings API passes these checks without changing consumers yet.
+
+### Slice 1 result
+
+Completed. Empty-store defaults were observed through the development CLI. TypeScript and the full regression harness passed (167 checks). Invalid timezone, time, weekdays, caps, source duplicates, context length, and hook limits are rejected. Generic metadata writes cannot bypass settings validation. Optional caps and evening-watch overrides can be removed. Prior settings are restored after fixtures.
+
+## Stage 3 · Slice 2 plan: settings consumers
+
+Goal: make backend day boundaries, prompt context, display caps, meeting preparation, and the web interface read settings at runtime.
+
+Files: time helpers, settings helpers, queries, check-ins, tasks, meetings, AI actions, web interface, embedded page, and regression fixtures.
+
+Checks: multiple timezone boundaries including daylight-saving transitions; non-default caps and workday; changed prompt context; live web updates; full development regression. Live AI assertions require a separately configured API key and remain an explicit gate until that key is available.
+
+Done criteria: consumers follow configuration without a source edit or page reload.

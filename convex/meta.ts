@@ -6,7 +6,7 @@
  */
 import { mutation, query } from "./_generated/server";
 import { MutationCtx, QueryCtx } from "./_generated/server";
-import { v } from "convex/values";
+import { v, ConvexError } from "convex/values";
 import { requireKey } from "./lib/auth";
 
 // NB: `key` args below are META keys — auth is `apiKey` (4.1, D15).
@@ -38,6 +38,7 @@ export const setMeta = mutation({
   returns: v.null(),
   handler: async (ctx, { apiKey, key, value }) => {
     requireKey(apiKey);
+    if (key === "settings") throw new ConvexError("Use settings:update for validated settings.");
     const row = await readMeta(ctx, key);
     if (row) await ctx.db.patch(row._id, { value });
     else await ctx.db.insert("meta", { key, value });
