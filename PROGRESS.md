@@ -163,3 +163,19 @@ Files: secret helper, rotation command, package script, and CLI integration test
 Checks: dry-run preserves values; minted values are distinct 48-character hex strings; rotation sets and reads them through stdin and memory; new keys work and old keys fail; command output contains neither old nor new keys; full development regression after rotation.
 
 Done criteria: rotation succeeds on development, explains which clients to update, and prints no secret.
+
+### Slice 7 result
+
+Completed. The rotation integration test passed: dry-run preserved both credentials; new values were distinct 48-character hex strings; set/read verification used stdin and memory; new credentials worked; old credentials were rejected; neither old nor new credentials appeared in output. All 187 development regressions passed after rotation.
+
+The command rotates both the function API key and the HTTP surface token. It identifies the clients to update and gives local retrieval commands without printing a value. A failed verification attempts to restore each previous credential.
+
+## Stage 3 · Slice 8 plan: bundled browser client
+
+Goal: serve the browser client within the page, with no external script request.
+
+Files: embed script, local build dependency, page import, HTTP security headers, third-party notices, and regression checks.
+
+Checks: bundle has no external imports; served HTML has no script URL; a real browser unlocks, subscribes, and saves settings using only its deployment hosts; inspect CSP and network requests; run the full development regression.
+
+Done criteria: loading and using the page requires only the Helm site and its matching Convex client endpoint.
