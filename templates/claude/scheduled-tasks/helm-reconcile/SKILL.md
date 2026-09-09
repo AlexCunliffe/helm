@@ -1,5 +1,5 @@
 ---
-name: reconcile
+name: helm-reconcile
 description: Close a day in Helm and reconcile planned and unplanned work. Use for /reconcile, end of day, or an authorized scheduled evening routine. Requires the Helm MCP server.
 ---
 
@@ -19,3 +19,5 @@ description: Close a day in Helm and reconcile planned and unplanned work. Use f
 9. Offer a journal line only in an interactive run. Write it to a knowledge store only after the user authorizes that write and supplies or confirms the destination. Otherwise show the line for the user to copy.
 
 Use `workday.eveningWatchFrom` or `workday.end` with `timezone` when the user chooses a schedule. A scheduled run uses the same procedure and leaves optional journal writing for the user. Send no external notification without authorization.
+
+Scheduled mode: Run the procedure above. Keep optional interactive actions pending. Report only meaningful changes, failures, or required user action.

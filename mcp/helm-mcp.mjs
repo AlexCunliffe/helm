@@ -38,7 +38,7 @@ if (!API_KEY) {
   );
 }
 
-const convex = new ConvexHttpClient(CONVEX_URL);
+const convex = new ConvexHttpClient(CONVEX_URL, { logger: false });
 const server = new McpServer({ name: "helm", version: "0.1.0" });
 
 // ── shared enums (mirror convex/validators.ts) ───────────────────────────────
@@ -59,13 +59,39 @@ function forward(name, description, shape, kind, fnName) {
         kind === "query" ? await convex.query(ref, withKey) : await convex.mutation(ref, withKey);
       return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
     } catch (err) {
+      const message = String(err?.message ?? err);
+      const safeMessage = API_KEY ? message.replaceAll(API_KEY, "[redacted]") : message;
       return {
         isError: true,
-        content: [{ type: "text", text: `helm ${name} failed: ${err?.message ?? String(err)}` }],
+        content: [{ type: "text", text: `helm ${name} failed: ${safeMessage}` }],
       };
     }
   });
 }
+
+// Settings patches mirror convex/validators.ts. The backend validates bounds.
+const source = z.object({
+  key: z.string(), label: z.string(),
+  kind: z.enum(["email", "chat", "calendar", "meetings", "tracker", "custom"]),
+  mcpServer: z.string().optional(), enabled: z.boolean(), notes: z.string().optional(),
+}).strict();
+const settingsPatch = z.object({
+  owner: z.object({ name: z.string().optional(), shortName: z.string().optional(),
+    role: z.string().optional(), business: z.string().optional(), tone: z.string().optional() }).strict().optional(),
+  founderContext: z.string().optional(), timezone: z.string().optional(),
+  workday: z.object({ start: z.string().optional(), end: z.string().optional(),
+    days: z.array(z.number()).optional(), eveningWatchFrom: z.string().nullable().optional() }).strict().optional(),
+  caps: z.object(Object.fromEntries(["today", "wins", "ageing", "waiting", "upcoming", "newToday",
+    "waitingAgeingDays", "openAgeingDays", "meetingPrepLeadMin", "focusMinutes"]
+    .map(key => [key, z.number().optional()]))).strict().nullable().optional(),
+  sources: z.array(source).optional(),
+  hook: z.object({ logSessions: z.boolean().optional(), includeCwd: z.boolean().optional(),
+    titleChars: z.number().optional() }).strict().optional(),
+}).strict();
+forward("getSettings", "Read the owner's settings, timezone, tone, workday, caps, sources, and hook preferences. Call this first in each Helm skill.",
+  {}, "query", "settings:get");
+forward("updateSettings", "Change the requested settings. Omitted fields stay unchanged. sources replaces the whole list. caps:null clears cap overrides; workday.eveningWatchFrom:null clears that override. Never put secrets in settings.",
+  { patch: settingsPatch }, "mutation", "settings:update");
 
 // ── writes ───────────────────────────────────────────────────────────────────
 forward(
@@ -162,7 +188,7 @@ forward(
 );
 forward(
   "delegate",
-  "Get tasks off the user's plate in one gesture (use when they says 'delegate X to Y', 'hand this to', " +
+  "Get tasks off the user's plate in one gesture (use when they say 'delegate X to Y', 'hand this to', " +
     "'get someone else to'). Moves the selected open tasks to waiting on <person> AND mints one xs " +
     "today-task to do the delegating (kickoffPrompt drafts the handover). Follow-up comes free from " +
     "the waiting/ageing machinery.",
@@ -211,7 +237,7 @@ forward(
 // ── reads ──────────────────────────────────────────────────────────────────—
 forward(
   "brief",
-  "The morning payload: today's pick + today's 3, waiting-on-others (oldest first), 2-min wins, ageing flags, streak. Lead with this.",
+  "The morning payload: today's pick + today's configured selection, waiting-on-others (oldest first), 2-min wins, ageing flags, streak. Lead with this.",
   {},
   "query",
   "queries:brief",
@@ -219,7 +245,7 @@ forward(
 forward("todaysPick", "The single right-now task, or null.", {}, "query", "queries:todaysPick");
 forward(
   "dayLog",
-  "Everything completed on a London day (planned + adhoc) — the evening reconcile payload. Defaults to today.",
+  "Everything completed on a day in the configured timezone (planned + adhoc) — the evening reconcile payload. Defaults to today.",
   { date: z.string().optional() },
   "query",
   "queries:dayLog",
@@ -268,7 +294,7 @@ forward(
 // ── check-ins / reconcile (Phase 1) ──────────────────────────────────────────
 forward(
   "chooseToday",
-  "Commit today's 3: record the chosen task ids and move them to status 'today' so every surface leads with them.",
+  "Commit today's configured selection: record the chosen task ids and move them to status 'today' so every surface leads with them.",
   { taskIds: z.array(z.string()), date: z.string().optional() },
   "mutation",
   "checkins:chooseToday",

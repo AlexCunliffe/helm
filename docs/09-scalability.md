@@ -8,7 +8,7 @@ Helm must absorb new capture sources, new surfaces, and new brain categories wit
 - **`source` is a free string** with a documented registry — a brand-new capture channel needs no schema edit at all.
 
 ## Add a capture source
-Implement the `CaptureSource` adapter (`docs/05`) and register it in the sweep's source list. It emits `CaptureCandidate`s into the same `capture` path. Nothing else changes. (Future: SMS, WhatsApp, voice memo, a Linear webhook…)
+Add an entry to `settings.sources`. Set its MCP server, kind, and source notes. Enable it when the connector is ready. For a custom backend integration, implement the `CaptureSource` adapter described in `docs/05-capture.md`. It emits `CaptureCandidate`s into the same `capture` path. Nothing else changes. (Future: SMS, WhatsApp, voice memo, a Linear webhook…)
 
 ## Add a surface
 Consume the read API / `GET /brief`. Render. No brain change (`docs/06`). (Future: Apple Watch complication, a hallway LED matrix, a CarPlay glance…)

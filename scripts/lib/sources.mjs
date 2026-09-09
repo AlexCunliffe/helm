@@ -1,0 +1,12 @@
+/** Optional wizard presets. Enable and name each server explicitly. */
+export const SOURCE_PRESETS = [
+  { key: "gmail", label: "Gmail", kind: "email", notes: "Use inbox (unarchived) messages that need a reply or action. Unarchived means outstanding. Skip newsletters and receipts. Use the thread ID for dedupe and the update timestamp for the watermark." },
+  { key: "superhuman", label: "Superhuman", kind: "email", notes: "Use inbox (unarchived) messages that need a reply or action. Unarchived means outstanding. Skip newsletters and receipts. Use the thread ID for dedupe and the update timestamp for the watermark." },
+  { key: "slack", label: "Slack", kind: "chat", notes: "Read mentions and direct messages that imply an action. Use a message or thread ID for dedupe. Preserve its permalink. Read only; do not post." },
+  { key: "gcal", label: "Google Calendar", kind: "calendar", notes: "Read events for today and tomorrow in the configured timezone. Propose preparation only when needed. Use the event ID for dedupe. Use the update timestamp for the watermark, not the future event start." },
+  { key: "outlook", label: "Outlook", kind: "email", notes: "Read actionable inbox messages. Use the stable message or conversation ID for dedupe and the update timestamp for the watermark." },
+  { key: "granola", label: "Granola", kind: "meetings", notes: "Enumerate meetings with list_meetings. Its time_range is an enum; use custom with custom_start/custom_end ISO dates for the bounded window. Fetch summaries and notes with get_meetings(meeting_ids); list metadata is insufficient. Emit one candidate per discrete action item. Emit none if there are no actions. Use <source.key>:<meetingId>:<stable-action-slug>, never a list index. Use the update timestamp if available. Leave the watermark unchanged if late notes cannot be read reliably." },
+  { key: "linear", label: "Linear", kind: "tracker", notes: "Read assigned issues updated within the bounded window. Propose the next action. Use the issue ID for dedupe and updatedAt for the watermark." },
+  { key: "notion", label: "Notion", kind: "tracker", notes: "Read the configured task database only. Use the page ID for dedupe and last edited time for the watermark. Do not modify the knowledge store." },
+  { key: "custom", label: "Custom", kind: "custom", notes: "Specify read tools, filters, the update timestamp, and stable IDs before enabling this source." },
+].map(source => ({ ...source, enabled: false, mcpServer: "" }));

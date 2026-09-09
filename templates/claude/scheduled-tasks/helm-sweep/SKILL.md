@@ -1,5 +1,5 @@
 ---
-name: sweep
+name: helm-sweep
 description: Run the Helm capture sweep over enabled configured sources. Use for /sweep, catch me up, or an authorized scheduled sweep. Requires Helm and the MCP servers named in settings.sources.
 ---
 
@@ -35,3 +35,5 @@ description: Run the Helm capture sweep over enabled configured sources. Use for
 When a new proposal clearly duplicates an existing open task, use `merge` with `{ sourceId: newerId, targetId: olderId }`. This preserves dedupe aliases. Use `connect` for related but distinct tasks. Never merge a completion through the open-task tool.
 
 Use the configured workday and timezone when the user chooses a schedule. A scheduled run follows the same source restrictions. Send no external notification without authorization.
+
+Scheduled mode: Run the procedure above. Keep optional interactive actions pending. Report only meaningful changes, failures, or required user action.
