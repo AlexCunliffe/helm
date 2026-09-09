@@ -179,3 +179,19 @@ Files: embed script, local build dependency, page import, HTTP security headers,
 Checks: bundle has no external imports; served HTML has no script URL; a real browser unlocks, subscribes, and saves settings using only its deployment hosts; inspect CSP and network requests; run the full development regression.
 
 Done criteria: loading and using the page requires only the Helm site and its matching Convex client endpoint.
+
+### Slice 8 result
+
+Completed. The local bundle has no external imports. Upstream licenses for Convex and its bundled helpers are included in `THIRD_PARTY_NOTICES.md` and in the served script. TypeScript and the development push pass. All 188 regression checks pass.
+
+A real browser unlocked the bundled page, opened its live subscription, and saved settings. Every observed request used the Helm site or its matching Convex client host. No page errors occurred. The CSP blocks other network destinations and external scripts. The root dependency audit remains clear.
+
+## Stage 3 · Slice 9 plan: optional session hook
+
+Goal: read hook preferences before reading session content. Log nothing by default. Include a directory only when explicitly enabled.
+
+Files: session-end hook, isolated HTTP fixtures, and development hook tests.
+
+Checks: default-off behavior; enabled logging; configured title length; directory opt-in; malformed input; missing session ID; invalid transcript path; network failures; silence and bounded shutdown; real development capture and fixture cleanup.
+
+Done criteria: default settings cause no session content to leave the hook, and enabled logging follows the configured limits.

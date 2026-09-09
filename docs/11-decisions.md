@@ -15,7 +15,7 @@
 - **D13 · Surface token.** HTTP clients use a header token. The token currently permits brief reads and capture proposals.
 - **D14 · Effort.** Use `size` for effort. Use `startedAt` for the start time.
 - **D15 · Function authentication.** The single-user implementation uses an API key argument. The gate is closed by default. `HELM_ALLOW_ANON=1` permits anonymous access and warns on every call. The old `HELM_REQUIRE_KEY` flag has no effect.
-- **D16 · Browser client.** The imported page uses a pinned browser-client import. Bundling it into the page is pending.
+- **D16 · Browser client.** The embed step bundles the pinned local client into the page. The page makes no external script request. Its CSP limits data connections to the matching deployment.
 - **D17 · Merge safety.** Follow `mergedInto` pointers during dedupe lookup. Preserve source keys and merge provenance.
 
 - **D18 · Configuration.** Store owner, time, source, cap, and hook preferences in one validated settings document. The panel and MCP update the same document. Area reads are bounded to 100 rows.

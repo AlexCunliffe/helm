@@ -679,11 +679,10 @@ async function main() {
       "glass: GET /glass serves HTML");
     assert(glassHtml.includes("Helm — the glass") && glassHtml.length > 50_000,
       "glass: the full page is what's served");
-    // 4.8 — the WIRED glass, not the sample-data prototype.
-    // Pin-agnostic: assert the wired import exists, not a version literal —
-    // the pin's single source of truth is the page itself (D16).
-    assert(/esm\.sh\/convex@[\d.]+\/browser/.test(glassHtml),
-      "glass: wired — ConvexClient via a pinned esm.sh import (D16)");
+    assert(!/esm\.sh|<script[^>]+src\s*=|import[^;]*https:\/\//i.test(glassHtml),
+      "glass: bundled client has no external script or import URL");
+    assert((glass.headers.get("content-security-policy") ?? "").includes("connect-src " + CONVEX_URL),
+      "glass: CSP restricts connections to this deployment");
     assert(glassHtml.includes("queries:brief") && glassHtml.includes("helm:apiKey"),
       "glass: wired — brief subscription + key gate present");
     assert(!glassHtml.includes("Chase Acme Supplies about the sample credit note"),

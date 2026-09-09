@@ -4,7 +4,7 @@
   Web interface (docs/06-surfaces.md); wired to the Convex brain the same
   week per docs/04-functions-and-api.md: live ConvexClient subscriptions paint the page, verbs
   write straight back with the shared API key (D15). Single self-contained
-  file, no build step — ConvexClient arrives via a pinned esm.sh import
+  file — the embed step bundles the pinned local Convex client
   (D16); served from the deployment itself at GET /glass (D10) via
   `npm run glass:embed`. Server behaviours (snooze-waker return-to-Now,
   T-30 meeting-prep promotion) are rendered, never reimplemented.
@@ -645,7 +645,7 @@
    returns parked tasks to Now, the cron promotes meeting prep at T-30 — the
    glass just paints the push. AI passes (enrich/polish/NL-search) degrade
    gracefully while ANTHROPIC_API_KEY is unset. */
-import { ConvexClient } from "https://esm.sh/convex@1.42.0/browser";
+import { ConvexClient } from "convex/browser";
 
 /* ═══ utilities ═══ */
 const $=s=>document.querySelector(s);

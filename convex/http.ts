@@ -112,10 +112,17 @@ http.route({
 http.route({
   path: "/glass",
   method: "GET",
-  handler: httpAction(async () => {
+  handler: httpAction(async (_ctx, req) => {
+    const clientOrigin = new URL(req.url).origin.replace(".convex.site", ".convex.cloud");
+    const csp = "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; " +
+      `connect-src ${clientOrigin} ${clientOrigin.replace("https:", "wss:")}; ` +
+      "img-src data:; base-uri 'none'; frame-ancestors 'none'; form-action 'none'";
     return new Response(GLASS_HTML, {
       headers: {
         "Content-Type": "text/html; charset=utf-8",
+        "Content-Security-Policy": csp,
+        "Referrer-Policy": "no-referrer",
+        "X-Content-Type-Options": "nosniff",
         "Cache-Control": "no-store", // one deploy = one page version, always fresh
       },
     });
