@@ -19,7 +19,6 @@ export const validate = internalQuery({
     for (const a of areas) validateArea(a);
     const existing=await readAreas(ctx);
     if(new Set([...existing.map(a=>a.key),...areas.map(a=>a.key)]).size>100) throw new ConvexError("Keep at most 100 total areas, including retired areas.");
-    if(settings.sources.some(s=>s.enabled&&!s.mcpServer?.trim())) throw new ConvexError("Set an MCP server name for each enabled source.");
     return null;
   },
 });

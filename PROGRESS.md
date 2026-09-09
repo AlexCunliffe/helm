@@ -337,3 +337,11 @@ Validation: isolated success, invalid-state, replay, PKCE, provider failure, mis
 QC repair 2 complete (SEC-01 and SEC-02): the optional calendar authorization helper now uses loopback, per-run state, PKCE, one-use callbacks, safe credential storage, and redacted failures. Existing secret-setting behavior is preserved.
 
 Validation: helper help command passed; isolated OAuth fixtures passed; an independent verifier passed 32 additional callback, replay, storage, and failure checks; the full development suite passed 204 backend assertions, both hook suites, and OAuth fixtures. No live Google account connection was made.
+
+## QC repair 3 plan: align validation and public errors
+
+Findings: MODEL-01, MODEL-02, MODEL-03, and CVX-08. Make MCP capture advertise only forward statuses. Validate enabled source server names in the shared settings validator. Reject impossible check-in dates before any write or status transition. Use safe ConvexError data for intentional application failures.
+
+Validation: type-check and push development functions; test invalid dates and source entries; inspect the actual MCP tool schema; verify typed application errors; run the full development and MCP suites.
+
+QC repair 3 complete: capture statuses, enabled-source validation, valid calendar dates, and safe expected errors are aligned across entry points. Independent verification passed 32 validation cases and 16 preservation cases. TypeScript, development push, all 210 backend assertions, hook/OAuth suites, and real stdio MCP tests passed.

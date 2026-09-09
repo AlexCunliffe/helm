@@ -16,7 +16,7 @@
 import { mutation, query, internalMutation, internalAction } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { Doc } from "./_generated/dataModel";
-import { v } from "convex/values";
+import { v, ConvexError } from "convex/values";
 import { requireKey } from "./lib/auth";
 import { readSettings } from "./lib/settings";
 import { meetingFields, meetingDoc } from "./validators";
@@ -211,7 +211,7 @@ export const linkPrep = mutation({
       .query("meetings")
       .withIndex("by_event", (q) => q.eq("eventId", eventId))
       .unique();
-    if (!meeting) throw new Error(`Meeting ${eventId} not found in the sync window.`);
+    if (!meeting) throw new ConvexError(`Meeting ${eventId} not found in the sync window.`);
     await ctx.db.patch(meeting._id, {
       prepTaskId: taskId,
       prepPromotedAt: undefined, // re-linking re-arms the promotion

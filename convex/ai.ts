@@ -21,7 +21,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { action } from "./_generated/server";
 import { api, internal } from "./_generated/api";
 import type { Settings } from "./lib/settings";
-import { v } from "convex/values";
+import { v, ConvexError } from "convex/values";
 import { requireKey } from "./lib/auth";
 import { sizeValidator, statusValidator, originValidator } from "./validators";
 
@@ -31,7 +31,7 @@ const apiKeyArg = { apiKey: v.optional(v.string()) };
 function client(): Anthropic {
   const key = process.env.ANTHROPIC_API_KEY;
   if (!key) {
-    throw new Error(
+    throw new ConvexError(
       "ai: ANTHROPIC_API_KEY is not configured on the deployment — " +
         "set it with `npx convex env set ANTHROPIC_API_KEY sk-ant-…`",
     );
@@ -54,13 +54,13 @@ async function structured<T>(
     messages: [{ role: "user", content: user }],
   });
   if (response.stop_reason === "refusal") {
-    throw new Error("ai: the model declined this request");
+    throw new ConvexError("ai: the model declined this request");
   }
   if (response.stop_reason === "max_tokens") {
-    throw new Error("ai: output hit the token cap — input too large for this call");
+    throw new ConvexError("ai: output hit the token cap — input too large for this call");
   }
   const text = response.content.find((b) => b.type === "text");
-  if (!text || text.type !== "text") throw new Error("ai: empty model response");
+  if (!text || text.type !== "text") throw new ConvexError("ai: empty model response");
   return JSON.parse(text.text) as T;
 }
 

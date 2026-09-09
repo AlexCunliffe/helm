@@ -43,6 +43,7 @@ const server = new McpServer({ name: "helm", version: "0.1.0" });
 
 // ── shared enums (mirror convex/validators.ts) ───────────────────────────────
 const status = z.enum(["inbox", "today", "next", "waiting", "someday", "done", "dropped"]);
+const captureStatus = z.enum(["inbox", "today", "next", "waiting", "someday"]);
 const size = z.enum(["xs", "m", "l"]);
 const origin = z.enum(["planned", "adhoc"]);
 const sourceRef = z
@@ -104,7 +105,7 @@ forward(
     title: z.string(),
     note: z.string().optional(),
     areaKey: z.string().optional(),
-    status: status.optional(),
+    status: captureStatus.optional(),
     size: size.optional(),
     urgent: z.boolean().optional(),
     source: z.string().optional(),

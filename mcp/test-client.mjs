@@ -25,6 +25,12 @@ try {
     "markDone", "reconcileDay", "reconcileOutstanding", "setStatus", "snooze", "todaysPick", "update", "waiting", "wake",
     "merge", "connect", "disconnect", "delegate"])
     assert.ok(tools.some(t => t.name === name), `${name} is registered`);
+  const captureSchema = tools.find(tool => tool.name === "capture").inputSchema;
+  assert.deepEqual(captureSchema.properties.status.enum, ["inbox", "today", "next", "waiting", "someday"]);
+  for (const status of ["done", "dropped"]) {
+    const result = await client.callTool({ name: "capture", arguments: { title: "TEST invalid terminal capture", status, dedupeKey: prefix + "invalid-" + status } });
+    assert.equal(result.isError, true, "terminal capture input is rejected at the MCP boundary");
+  }
   saved = await call("getSettings");
   const changed = await call("updateSettings", { patch: { owner: { shortName: "Sam" }, timezone: "Asia/Kathmandu",
     sources: [{ key: "gcal", label: "Calendar", kind: "calendar", enabled: true, mcpServer: "calendar", notes: "Read prep events." }],

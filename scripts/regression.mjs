@@ -391,6 +391,11 @@ async function main() {
   console.log("\nF · check-ins on a past date");
   const f1 = await m("tasks:capture", { title: "TEST choose me", dedupeKey: key("f1") });
   const fDone = await m("tasks:logCompletion", { title: "TEST already done", dedupeKey: key("f2") });
+  await throws(() => m("checkins:upsertCheckin", { date: "2026-02-30", kind: "morning" }), "checkins: reject impossible upsert dates");
+  await throws(() => m("checkins:chooseToday", { taskIds: [f1.taskId], date: "2026-02-30" }), "checkins: reject impossible selection dates");
+  assert((await q("tasks:get", { id: f1.taskId })).status === "inbox", "checkins: invalid dates leave task status unchanged");
+  try { await m("tasks:merge", { sourceId: f1.taskId, targetId: f1.taskId }); assert(false, "errors: expected merge refusal"); }
+  catch (error) { assert(typeof error.data === "string" && error.data.includes("can't merge into itself"), "errors: expected failures expose safe ConvexError data"); }
   await m("checkins:chooseToday", { taskIds: [f1.taskId, fDone.taskId], date: SAFE_DATE });
   const fMorning = await q("checkins:getCheckin", { date: SAFE_DATE, kind: "morning" });
   assert(fMorning.chosen.length === 1 && fMorning.chosen[0] === f1.taskId,
@@ -948,6 +953,8 @@ async function main() {
       { workday: { start: "25:00" } }, { workday: { days: [1, 1] } },
       { workday: { end: "06:00" } }, { caps: { today: -1 } },
       { hook: { titleChars: 0 } }, { sources: [reread.sources[0], reread.sources[0]] },
+      { sources: [{ key: "gcal", label: "Calendar", kind: "calendar", enabled: true }] },
+      { sources: [{ key: "gcal", label: "Calendar", kind: "calendar", enabled: true, mcpServer: "   " }] },
     ]) await throws(() => m("settings:update", { patch }), "settings: invalid " + Object.keys(patch)[0] + " rejected");
     await throws(() => m("meta:setMeta", { key: "settings", value: {} }),
       "settings: generic meta write cannot bypass validation");

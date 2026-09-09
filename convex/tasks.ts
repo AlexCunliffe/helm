@@ -11,7 +11,7 @@
 import { mutation, internalMutation, query } from "./_generated/server";
 import { MutationCtx } from "./_generated/server";
 import { Doc, Id } from "./_generated/dataModel";
-import { v } from "convex/values";
+import { v, ConvexError } from "convex/values";
 import {
   statusValidator,
   captureStatusValidator,
@@ -54,7 +54,7 @@ async function applyStatus(
   now: number,
 ): Promise<void> {
   const task = await ctx.db.get(id);
-  if (!task) throw new Error(`Task ${id} not found.`);
+  if (!task) throw new ConvexError(`Task ${id} not found.`);
   const patch: Record<string, unknown> = { status, updatedAt: now };
   if (status === "done") {
     if (task.status !== "done" || task.doneAt === undefined) patch.doneAt = now;
@@ -296,7 +296,7 @@ export const snooze = mutation({
   handler: async (ctx, { apiKey, id, until }) => {
     requireKey(apiKey);
     const task = await ctx.db.get(id);
-    if (!task) throw new Error(`Task ${id} not found.`);
+    if (!task) throw new ConvexError(`Task ${id} not found.`);
     await ctx.db.patch(id, { snoozeUntil: until, updatedAt: Date.now() });
     return null;
   },
@@ -314,7 +314,7 @@ export const start = mutation({
   handler: async (ctx, { apiKey, id }) => {
     requireKey(apiKey);
     const task = await ctx.db.get(id);
-    if (!task) throw new Error(`Task ${id} not found.`);
+    if (!task) throw new ConvexError(`Task ${id} not found.`);
     if (task.startedAt === undefined) {
       await ctx.db.patch(id, { startedAt: Date.now(), updatedAt: Date.now() });
     }
@@ -392,7 +392,7 @@ export const wake = mutation({
   handler: async (ctx, { apiKey, id }) => {
     requireKey(apiKey);
     const task = await ctx.db.get(id);
-    if (!task) throw new Error(`Task ${id} not found.`);
+    if (!task) throw new ConvexError(`Task ${id} not found.`);
     // Convex db.patch removes fields set to undefined.
     await ctx.db.patch(id, { snoozeUntil: undefined, updatedAt: Date.now() });
     return null;
@@ -445,7 +445,7 @@ export const update = mutation({
     // apiKey is auth, not data — it must never land in the patch below.
     const { apiKey: _apiKey, id, areaKey, ...rest } = args;
     const task = await ctx.db.get(id);
-    if (!task) throw new Error(`Task ${id} not found.`);
+    if (!task) throw new ConvexError(`Task ${id} not found.`);
     const patch: Record<string, unknown> = { updatedAt: Date.now() };
     for (const [k, val] of Object.entries(rest)) {
       if (val !== undefined) patch[k] = val;
@@ -489,7 +489,7 @@ export const delegate = mutation({
       handedOver.push(task);
     }
     if (handedOver.length === 0) {
-      throw new Error("delegate: nothing open to delegate in the selection.");
+      throw new ConvexError("delegate: nothing open to delegate in the selection.");
     }
 
     const titles = handedOver.map((t) => t.title);
@@ -539,15 +539,15 @@ export const merge = mutation({
   returns: v.object({ targetId: v.id("tasks") }),
   handler: async (ctx, { apiKey, sourceId, targetId }) => {
     requireKey(apiKey);
-    if (sourceId === targetId) throw new Error("merge: a task can't merge into itself.");
+    if (sourceId === targetId) throw new ConvexError("merge: a task can't merge into itself.");
     const source = await ctx.db.get(sourceId);
     const target = await ctx.db.get(targetId);
-    if (!source) throw new Error(`Task ${sourceId} not found.`);
-    if (!target) throw new Error(`Task ${targetId} not found.`);
+    if (!source) throw new ConvexError(`Task ${sourceId} not found.`);
+    if (!target) throw new ConvexError(`Task ${targetId} not found.`);
     // Closed rows are out of play: merging INTO one would bury live work, and a
     // closed source is already resolved — nothing to collapse.
-    if (isClosed(source)) throw new Error("merge: source is already done/dropped.");
-    if (isClosed(target)) throw new Error("merge: target is done/dropped — merge into an open task.");
+    if (isClosed(source)) throw new ConvexError("merge: source is already done/dropped.");
+    if (isClosed(target)) throw new ConvexError("merge: target is done/dropped — merge into an open task.");
     const now = Date.now();
 
     const patch: Record<string, unknown> = { updatedAt: now };
@@ -626,11 +626,11 @@ export const connect = mutation({
   returns: v.null(),
   handler: async (ctx, { apiKey, aId, bId }) => {
     requireKey(apiKey);
-    if (aId === bId) throw new Error("connect: a task can't link to itself.");
+    if (aId === bId) throw new ConvexError("connect: a task can't link to itself.");
     const a = await ctx.db.get(aId);
     const b = await ctx.db.get(bId);
-    if (!a) throw new Error(`Task ${aId} not found.`);
-    if (!b) throw new Error(`Task ${bId} not found.`);
+    if (!a) throw new ConvexError(`Task ${aId} not found.`);
+    if (!b) throw new ConvexError(`Task ${bId} not found.`);
     const now = Date.now();
     if (!(a.links ?? []).includes(bId)) {
       await ctx.db.patch(aId, { links: [...(a.links ?? []), bId], updatedAt: now });
@@ -668,7 +668,7 @@ export const confirmProposed = mutation({
   handler: async (ctx, { apiKey, id }) => {
     requireKey(apiKey);
     const task = await ctx.db.get(id);
-    if (!task) throw new Error(`Task ${id} not found.`);
+    if (!task) throw new ConvexError(`Task ${id} not found.`);
     await ctx.db.patch(id, { needsReview: false, updatedAt: Date.now() });
     return null;
   },

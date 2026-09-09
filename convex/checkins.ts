@@ -44,6 +44,7 @@ export const getCheckin = query({
   returns: v.union(checkinDoc, v.null()),
   handler: async (ctx, { apiKey, date, kind }) => {
     requireKey(apiKey);
+    dayRange(date, (await readSettings(ctx)).timezone);
     return await findCheckin(ctx, date, kind);
   },
 });
@@ -63,6 +64,7 @@ export const upsertCheckin = mutation({
   returns: v.id("checkins"),
   handler: async (ctx, args) => {
     requireKey(args.apiKey);
+    dayRange(args.date, (await readSettings(ctx)).timezone);
     const existing = await findCheckin(ctx, args.date, args.kind);
     requireFixtureOwnership(existing, args.fixtureRunId);
     const row = {
@@ -96,6 +98,7 @@ export const chooseToday = mutation({
     const settings = await readSettings(ctx);
     const now = Date.now();
     const day = date ?? dateString(now, settings.timezone);
+    dayRange(day, settings.timezone);
     const existing = await findCheckin(ctx, day, "morning");
     requireFixtureOwnership(existing, fixtureRunId);
     const prevChosen = existing?.chosen ?? [];

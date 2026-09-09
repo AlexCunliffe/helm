@@ -63,6 +63,7 @@ export function validateSettings(s: Settings): void {
     if (!source.label.trim()) fail("sources.label", "must not be empty");
     text(source.label, "sources.label", 120); text(source.mcpServer, "sources.mcpServer", 120);
     text(source.notes, "sources.notes", 2000);
+    if (source.enabled && !source.mcpServer?.trim()) fail("sources.mcpServer", "must name a server for each enabled source");
   }
 }
 
