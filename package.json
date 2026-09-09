@@ -21,7 +21,8 @@
     "uninstall:claude": "node scripts/uninstall-claude.mjs",
     "skills:check": "node scripts/install-claude.mjs --check",
     "test:install": "node scripts/test-install-claude.mjs",
-    "test:calendar-auth": "node scripts/test-google-cal-auth.mjs"
+    "test:calendar-auth": "node scripts/test-google-cal-auth.mjs",
+    "test:setup:order": "node --experimental-vm-modules scripts/test-setup-order.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.110.0",

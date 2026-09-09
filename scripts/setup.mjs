@@ -32,7 +32,7 @@ function answersFrom(file,current){
   if(!current.hasSettings&&!input.timezone)settings.timezone=Intl.DateTimeFormat().resolvedOptions().timeZone;
   const preset=input.areaPreset??"generic";
   if(!AREA_PRESETS[preset])throw new Error("Use the generic or classic area preset.");
-  const existing=current.areas.filter(a=>!a.archived).map(({key,label,color,order,vaultDomain})=>({key,label,color,order,...(vaultDomain?{vaultDomain}:{})}));
+  const existing=current.areas.filter(a=>!a.archived).sort((a,b)=>a.order-b.order||a.key.localeCompare(b.key)).map(({key,label,color,order,vaultDomain})=>({key,label,color,order,...(vaultDomain?{vaultDomain}:{})}));
   const areas=input.areas??(input.areaPreset?clone(AREA_PRESETS[preset]):existing.length?existing:clone(AREA_PRESETS.generic));
   validateAreas(areas);noSecrets(settings);
   return {settings,areas};
@@ -81,8 +81,8 @@ async function main(){
     await review(3,"Time",{writes:["settings.timezone","settings.workday","settings.caps"],timezone:answer.settings.timezone,workday:answer.settings.workday,caps:answer.settings.caps??{}},()=>{selected.timezone=answer.settings.timezone;selected.workday=answer.settings.workday;if(answer.settings.caps)selected.caps=answer.settings.caps;else delete selected.caps;});
     if(interactive){
       const preset=await p.ask("Use current, generic, or classic areas","current");if(preset!=="current"){if(!AREA_PRESETS[preset])throw new Error("Use current, generic, or classic.");answer.areas=clone(AREA_PRESETS[preset]);}
-      const kept=[];for(const area of answer.areas){console.log(`${area.key}: ${area.label} (${area.color})`);if(await p.confirm(`Remove ${area.label}? [y/N]`))continue;area.label=await p.ask("Enter the area label",area.label);area.color=await p.ask("Enter a six-digit hex color",area.color);kept.push({...area,order:kept.length});}
-      while(await p.confirm("Add another area? [y/N]")){kept.push({key:await p.ask("Enter a lowercase area key"),label:await p.ask("Enter the area label"),color:await p.ask("Enter a six-digit hex color","#5B8DEF"),order:kept.length});}
+      const kept=[];for(const area of answer.areas){console.log(`${area.key}: ${area.label} (${area.color})`);if(await p.confirm(`Remove ${area.label}? [y/N]`))continue;area.label=await p.ask("Enter the area label",area.label);area.color=await p.ask("Enter a six-digit hex color",area.color);kept.push({...area});}
+      while(await p.confirm("Add another area? [y/N]")){const order=Math.max(-1,...kept.map(area=>area.order))+1;if(order>10000)throw new Error("Use an answer file to lower area orders before appending another area.");kept.push({key:await p.ask("Enter a lowercase area key"),label:await p.ask("Enter the area label"),color:await p.ask("Enter a six-digit hex color","#5B8DEF"),order});}
       answer.areas=kept;
     }
     validateAreas(answer.areas);

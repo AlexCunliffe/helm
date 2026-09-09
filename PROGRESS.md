@@ -345,3 +345,11 @@ Findings: MODEL-01, MODEL-02, MODEL-03, and CVX-08. Make MCP capture advertise o
 Validation: type-check and push development functions; test invalid dates and source entries; inspect the actual MCP tool schema; verify typed application errors; run the full development and MCP suites.
 
 QC repair 3 complete: capture statuses, enabled-source validation, valid calendar dates, and safe expected errors are aligned across entry points. Independent verification passed 32 validation cases and 16 preservation cases. TypeScript, development push, all 210 backend assertions, hook/OAuth suites, and real stdio MCP tests passed.
+
+## QC repair 4 plan: preserve configured area order
+
+Finding: INST-01. Present current areas in display order. Retain their saved order values. Append new areas after the largest retained order. Reject additions beyond the supported order range before any write.
+
+Validation: exercise the actual interactive wizard with isolated prompts, both preset and custom orders, unchanged and appended areas, and dry-run preservation. Run the real development wizard without changing its values. Run the full development suite.
+
+QC repair 4 complete: unchanged interactive setup preserves all saved area orders and the default category. New areas append after the largest retained order, with a safe bound check. Eight bundled and 19 independent isolated scenarios passed. The live 43-prompt wizard preserved exact settings and area values. All 210 backend assertions and hook/OAuth suites passed.
