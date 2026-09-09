@@ -56,6 +56,10 @@ try {
   const args = { title: "TEST MCP capture", areaKey: area.key, dedupeKey: prefix + "capture" };
   const first = await call("capture", args), second = await call("capture", args);
   assert.equal(first.created, true); assert.equal(second.created, false); assert.equal(second.taskId, first.taskId);
+  await call("markDone", { id: first.taskId });
+  const kept = await call("capture", { ...args, reopenCompleted: false });
+  assert.equal(kept.created, false); assert.equal(kept.taskId, first.taskId);
+  assert.equal((await call("get", { id: first.taskId })).status, "done");
   assert.ok(Array.isArray(await call("list", { areaKey: area.key })));
   const bad = await client.callTool({ name: "get", arguments: { id: "not-a-real-id" } });
   assert.equal(bad.isError, true);

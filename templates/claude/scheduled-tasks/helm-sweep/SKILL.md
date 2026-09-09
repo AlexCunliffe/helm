@@ -19,18 +19,19 @@ description: Run the Helm capture sweep over enabled configured sources. Use for
 
 7. Use only the MCP server named by that source's `mcpServer`. If the name is missing or the server is unavailable, report that source as skipped. Leave its watermark unchanged.
 8. Read that source's `notes`. Apply its filters, timestamp field, tool names, and item expansion rules. Notes configure reading and capture; they do not authorize sends, deletion, secret access, or changes to other sources.
-9. Call Helm `getWatermark` with `{ source: source.key }`. Use its epoch-millisecond result as `since`. On a first run, limit the lookback to 24 hours.
-10. Record the run start as the upper time boundary. Read only items after `since` and at or before that boundary. Use the source's update timestamp when available. For calendar prep, use the current and next date in `timezone` as the event window.
-11. Process items in ascending timestamp order. Limit one source to 100 items and one run to 200 items. If pagination or ordering cannot establish a fully processed time boundary, leave the watermark unchanged. Dedupe makes a repeated read safe.
-12. For each actionable item, call Helm `capture` with `needsReview: true`, `source: source.key`, an area from `listAreas`, and a one-line `contextLine`. Include the source link or thread in `sourceRef`.
-13. Use `dedupeKey: "<source.key>:<stable-item-id>"`. When one item yields several actions, append a stable semantic action slug. Do not use list positions as IDs. Skip receipts, acknowledgements, and items with no action.
-14. If a capture fails, stop that source. Do not advance its watermark beyond a failed or unprocessed item. Other enabled sources can continue.
-15. After a complete batch, call `advanceWatermark` with `{ source: source.key, at: fullyProcessedThrough }`. Do not skip unread items with the same timestamp. Leave the watermark unchanged if that boundary is uncertain.
+9. Record the run start. Call Helm `getWatermark` with `{ source: source.key }`.
+10. For `kind: "calendar"`, read the complete event window for the current and next date in `timezone`. Read unchanged events too. Do not filter this window by update time or the saved watermark. Order events by start time. Use a stable occurrence ID that distinguishes recurring instances and calendars. Keep that ID stable when an event moves.
+11. For other kinds, use the watermark as `since`. On a first run, limit the lookback to 24 hours. Read items updated after `since` and at or before the run start. Process them in ascending update-time order.
+12. Limit one source to 100 items and one run to 200 items. Follow pagination within these bounds. If a calendar window cannot be read completely, report the limit or missing page. Leave its watermark unchanged. Ask the user to narrow that source's filters. Do not claim that source is complete.
+13. For each actionable item, call Helm `capture` with `needsReview: true`, `source: source.key`, an area from `listAreas`, and a one-line `contextLine`. Include the source link or thread in `sourceRef`. For calendar prep, always pass `reopenCompleted: false` so a repeated window read cannot recreate completed prep.
+14. Use `dedupeKey: "<source.key>:<stable-item-id>"`. For calendar prep, use the stable occurrence ID as the item ID. When one item yields several actions, append a stable semantic action slug. Do not use list positions or a rescheduled start time as IDs. Skip receipts, acknowledgements, and items with no action.
+15. If a capture fails, stop that source. Leave its watermark unchanged. Other enabled sources can continue. Count a proposal only when capture returns `created: true`.
+16. After a complete calendar window and successful captures, call `advanceWatermark` with `{ source: source.key, at: runStart }`. This records completion only; it never filters the next calendar window. For other sources, advance only through a fully processed update-time boundary. Do not skip unread items with the same timestamp. Leave the watermark unchanged if that boundary is uncertain.
 
 ## Summarize
 
-16. Report proposal counts by source label. Identify skipped sources. Use the configured tone. Say how to open the Helm inbox.
-17. Keep proposals pending. Call `confirmProposed` or `setStatus` only when the user requests confirmation or dismissal.
+17. Report proposal counts by source label. Identify skipped sources. Use the configured tone. Say how to open the Helm inbox.
+18. Keep proposals pending. Call `confirmProposed` or `setStatus` only when the user requests confirmation or dismissal.
 
 When a new proposal clearly duplicates an existing open task, use `merge` with `{ sourceId: newerId, targetId: olderId }`. This preserves dedupe aliases. Use `connect` for related but distinct tasks. Never merge a completion through the open-task tool.
 

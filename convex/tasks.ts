@@ -139,11 +139,14 @@ export const capture = mutation({
     dueAt: v.optional(v.number()),
     needsReview: v.optional(v.boolean()), // true when proposed by a sweep
     dedupeKey: v.optional(v.string()),
+    reopenCompleted: v.optional(v.boolean()), // false for repeated rolling-window reads
   },
   returns: v.object({ taskId: v.id("tasks"), created: v.boolean() }),
   handler: async (ctx, args) => {
     requireKey(args.apiKey);
     const now = Date.now();
+    if (args.reopenCompleted === false && !args.dedupeKey)
+      throw new ConvexError("Supply a dedupe key when reopenCompleted is false.");
 
     // Idempotent capture: a thread already captured won't double. On a re-hit we
     // only refresh re-entry context — never clobber the user's triage (status,
@@ -164,6 +167,10 @@ export const capture = mutation({
       const dropped = matches.find((t) => t.status === "dropped");
       if (dropped) {
         return { taskId: dropped._id, created: false };
+      }
+      if (args.reopenCompleted === false) {
+        const completed = [...matches].reverse().find(t => t.status === "done");
+        if (completed) return { taskId: completed._id, created: false };
       }
     }
 

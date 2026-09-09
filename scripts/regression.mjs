@@ -202,6 +202,14 @@ async function main() {
   await m("tasks:markDone", { id: b2.taskId });
   const b2res = await m("tasks:capture", { title: "TEST done cycle 2", dedupeKey: key("b2") });
   assert(b2res.created === true && b2res.taskId !== b2.taskId, "H1a: done match resurrects as a fresh task");
+  const calendarKey = key("calendar:occurrence:prep");
+  const calendarPrep = await m("tasks:capture", { title: "TEST calendar prep", dedupeKey: calendarKey, reopenCompleted: false });
+  await m("tasks:markDone", { id: calendarPrep.taskId });
+  const completedPrep = await q("tasks:get", { id: calendarPrep.taskId });
+  const repeatedPrep = await m("tasks:capture", { title: "TEST repeated window", dedupeKey: calendarKey, reopenCompleted: false, contextLine: "must stay unchanged" });
+  assert(!repeatedPrep.created && repeatedPrep.taskId === calendarPrep.taskId, "calendar capture: repeated window preserves completed prep");
+  assert(JSON.stringify(await q("tasks:get", { id: calendarPrep.taskId })) === JSON.stringify(completedPrep), "calendar capture: completed task remains unchanged");
+  await throws(() => m("tasks:capture", { title: "TEST missing calendar identity", reopenCompleted: false }), "calendar capture: stable dedupe identity required");
   // …and the multi-row key then dedupes against the LIVE row, not the old done one
   const b2third = await m("tasks:capture", { title: "TEST done cycle 3", dedupeKey: key("b2") });
   assert(b2third.created === false && b2third.taskId === b2res.taskId,
@@ -844,6 +852,8 @@ async function main() {
 
   // Done target + re-sweep on the alias key → fresh task (done fall-through
   // survives the redirect; the thread can become live again).
+  const noReopenMerge = await m("tasks:capture", { title: "TEST completed merged prep", dedupeKey: key("ps"), reopenCompleted: false });
+  assert(!noReopenMerge.created && noReopenMerge.taskId === pt.taskId, "calendar capture: merged completed work remains closed");
   const reAfterDone = await m("tasks:capture", { title: "TEST thread reactivates", dedupeKey: key("ps") });
   assert(reAfterDone.created === true && reAfterDone.taskId !== pt.taskId,
     "merge: done target + re-swept source key mints a fresh task (done fall-through intact)");

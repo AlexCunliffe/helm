@@ -353,3 +353,13 @@ Finding: INST-01. Present current areas in display order. Retain their saved ord
 Validation: exercise the actual interactive wizard with isolated prompts, both preset and custom orders, unchanged and appended areas, and dry-run preservation. Run the real development wizard without changing its values. Run the full development suite.
 
 QC repair 4 complete: unchanged interactive setup preserves all saved area orders and the default category. New areas append after the largest retained order, with a safe bound check. Eight bundled and 19 independent isolated scenarios passed. The live 43-prompt wizard preserved exact settings and area values. All 210 backend assertions and hook/OAuth suites passed.
+
+## QC repair 5 plan: make rolling calendar capture complete and repeatable
+
+Finding: CONTRACT-01. Read the complete current/next-date event window without intersecting update watermarks. Use stable occurrence and action identities. Add an atomic capture option that preserves completed tasks during repeated window reads. Keep default reactivation semantics for other sources. Update both skill variants, source presets, and API documentation.
+
+Validation: verify the real MCP schema and completed/dropped/merged capture behavior; exercise an unchanged old booking entering the calendar window; compare scheduled and interactive instructions; run TypeScript, development push, and full backend/MCP suites.
+
+QC repair 5 complete: calendar prep reads the full rolling window independently of update watermarks, uses stable occurrence identities, and atomically preserves completed work on repeated reads. Default capture reactivation remains available for other sources. Both skill variants and references match.
+
+Validation: TypeScript and development push passed; 214 backend assertions, hook/OAuth suites, and real stdio MCP tests passed. Independent verification passed 15 actual-handler, nine stdio-to-mocked-handler, and ten procedural calendar scenarios. The latter verify the written procedure with fixtures; they are not a native conversational sweep run.

@@ -100,7 +100,7 @@ forward(
   "Capture a forward task into Helm (origin: planned). Pass a one-line title; " +
     "use an area key from listAreas when you can. " +
     "Add a contextLine ('where this is at') and a kickoffPrompt (a ready-to-run instruction) to kill re-entry cost. " +
-    "Default status is inbox; set today/next if clearly stated. dedupeKey makes re-capture idempotent.",
+    "Default status is inbox; set today/next if clearly stated. dedupeKey preserves open/dropped work. Set reopenCompleted:false with a dedupeKey for rolling calendar reads; completed prep then stays completed.",
   {
     title: z.string(),
     note: z.string().optional(),
@@ -117,6 +117,7 @@ forward(
     dueAt: z.number().optional(),
     needsReview: z.boolean().optional(),
     dedupeKey: z.string().optional(),
+    reopenCompleted: z.boolean().optional(),
   },
   "mutation",
   "tasks:capture",

@@ -8,7 +8,7 @@ The MCP tools `capture` and `logCompletion` call `tasks:capture` and `tasks:logC
 
 Lifecycle tools include `markDone`, `snooze`, `wake`, `defer`, `setStatus`, `update`, and `confirmProposed`. Relationship tools include `merge`, `connect`, `disconnect`, and `delegate`. The glass also uses `tasks:start` to record work starting.
 
-Full capture dedupe preserves user triage and refreshes re-entry context. Dropped work remains suppressed. Completed work can lead to a new task. Merge lookup follows the surviving task. Restricted HTTP ingest has a separate namespace and narrower update rules.
+Full capture dedupe preserves user triage and refreshes re-entry context. Dropped work remains suppressed. Completed work can lead to a new task by default. Pass `reopenCompleted: false` with a dedupe key to keep completed work closed during rolling calendar reads. This check and capture run in one transaction. Merge lookup follows the surviving task. Restricted HTTP ingest has a separate namespace and narrower update rules.
 
 ## Read operations
 

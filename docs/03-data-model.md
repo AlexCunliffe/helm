@@ -45,7 +45,7 @@ Task indexes are `by_status`, `by_area`, `by_waiting` (`status`, `waitingSince`)
 
 `meta` contains `key` and `value`, indexed by `by_key`. One row with `key: "settings"` stores the validated owner, context, timezone, workday, caps, sources, and hook configuration. Read [the full field reference](configure.md). The settings mutation validates updates; the generic metadata setter cannot replace this row.
 
-Other metadata includes source watermarks (`sweep:<source>:lastAt`) and legacy interface preferences. A source watermark identifies a fully processed update boundary, not a future event start.
+Other metadata includes source watermarks (`sweep:<source>:lastAt`) and legacy interface preferences. For incremental sources, a watermark identifies a fully processed update boundary. For calendar prep, it records the start of the last completed window read and never filters the next event window. It is never a future event start.
 
 ## Planned and unplanned work
 

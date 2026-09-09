@@ -44,15 +44,17 @@ This example assumes a connected MCP server named `calendar`. Replace that name 
   "kind": "calendar",
   "mcpServer": "calendar",
   "enabled": false,
-  "notes": "Read events for today and tomorrow in the configured timezone. Propose preparation only when needed. Use the event ID for dedupe. Use the event update timestamp for the watermark. Do not use the future event start as a watermark. Preserve the event link. Do not edit events or send invitations."
+  "notes": "Read all events for today and tomorrow in the configured timezone, including unchanged events. Do not filter by update time or watermark. Use a stable calendar and occurrence ID plus a semantic action slug for dedupe. Capture prep with reopenCompleted:false. Advance the watermark to run start only after the complete window succeeds. Preserve the event link. Do not edit events or send invitations."
 }
 ```
 
-A future event start is not a processing boundary. A watermark based on it can skip later edits. If the connector cannot provide reliable update timestamps or a complete result window, keep the watermark unchanged.
+Calendar prep uses a rolling event window. Each run reads the whole window, including events booked before the last run. A completed window records its run-start timestamp as a watermark for diagnostics. That watermark does not filter later calendar reads. Keep it unchanged after an incomplete window or failed capture.
+
+Use a connector occurrence ID that stays stable after rescheduling. Include the calendar ID when needed for uniqueness. If the connector only supplies a recurring series ID, combine it with the original occurrence start. Do not use the current start time as the identity. Pass `reopenCompleted: false` with this dedupe key. The backend atomically preserves completed and dropped work, including merged keys.
 
 ## Processing and cost bounds
 
-The skill limits a source to 100 items and a run to 200 items. It proposes tasks with `needsReview: true`. It advances `sweep:<source.key>:lastAt` only through a fully processed boundary. Stable dedupe keys make a repeat safe. The task API preserves user triage on recapture. Completed tasks can lead to new work; dropped tasks remain suppressed. Merged keys resolve to the surviving task for the full MCP capture API.
+The skill limits a source to 100 items and a run to 200 items. It proposes tasks with `needsReview: true`. It advances `sweep:<source.key>:lastAt` only through a fully processed boundary. Stable dedupe keys make a repeat safe. The task API preserves user triage on recapture. Completed tasks can lead to new work by default. Calendar prep passes `reopenCompleted: false` to keep completions closed. Dropped tasks remain suppressed. Merged keys resolve to the surviving task for the full MCP capture API.
 
 These are instruction-level bounds. Configure spending limits in the Claude scheduler or account. The backend does not schedule paid source sweeps. Installing a scheduled-task template does not activate it. The skill summarizes results in the current conversation. External messages require separate authorization.
 
