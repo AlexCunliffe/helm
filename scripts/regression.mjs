@@ -78,7 +78,8 @@ function purge() {
     ["convex", "run", "testing:purgeTestData", JSON.stringify({ prefix: PREFIX, dates: [SAFE_DATE, SAFE_DATE2] })],
     { cwd: ROOT, encoding: "utf8" },
   );
-  return JSON.parse(out);
+  const ingest=JSON.parse(execFileSync("npx",["convex","run","testing:purgeTestData",JSON.stringify({prefix:"ingest:"+PREFIX,dates:[]})],{cwd:ROOT,encoding:"utf8"}));
+  const result=JSON.parse(out);return {...result,tasks:result.tasks+ingest.tasks};
 }
 
 let passed = 0;
@@ -493,6 +494,28 @@ async function main() {
       body: JSON.stringify({ title: "TEST ingest again", dedupeKey: key("h2") }),
     });
     assert((await ingAgain.json()).created === false, "http: /ingest idempotent by dedupeKey");
+    const proposal=(await q("tasks:get",{id:ingBody.taskId}));
+    assert(proposal.title==="TEST ingest again"&&proposal.dedupeKey==="ingest:"+key("h2"),"http: repeats refresh only the namespaced proposal");
+    const post=body=>fetch(`${SITE_URL}/ingest`,{method:"POST",headers:ingestHeaders,body:JSON.stringify(body)});
+    const forced=await post({title:"TEST force proposal",dedupeKey:key("h-force"),source:"manual",needsReview:false,status:"done"});
+    const forcedDoc=await q("tasks:get",{id:(await forced.json()).taskId});
+    assert(forcedDoc.source==="ingest"&&forcedDoc.needsReview===true&&forcedDoc.status==="inbox","http: caller cannot bypass proposal source or review");
+    await m("tasks:confirmProposed",{id:ingBody.taskId});
+    const accepted=await q("tasks:get",{id:ingBody.taskId});
+    await post({title:"TEST must not change accepted",contextLine:"must not replace",dedupeKey:key("h2")});
+    assert(JSON.stringify(await q("tasks:get",{id:ingBody.taskId}))===JSON.stringify(accepted),"http: accepted task is unchanged on repeat");
+    const unrelated=await m("tasks:capture",{title:"TEST unrelated source",contextLine:"Keep this",dedupeKey:key("h-other")});
+    const unrelatedBefore=await q("tasks:get",{id:unrelated.taskId});
+    const separated=await post({title:"TEST separate proposal",contextLine:"Do not overwrite",dedupeKey:key("h-other")});
+    assert((await separated.json()).taskId!==unrelated.taskId&&JSON.stringify(await q("tasks:get",{id:unrelated.taskId}))===JSON.stringify(unrelatedBefore),"http: dedupe namespace isolates other sources");
+    const mergeTarget=await m("tasks:capture",{title:"TEST protected merge target",contextLine:"Keep merge context",dedupeKey:key("h-merge")});
+    await m("tasks:merge",{sourceId:forcedDoc._id,targetId:mergeTarget.taskId});
+    const mergeBefore=await q("tasks:get",{id:mergeTarget.taskId});
+    await post({title:"TEST must not follow merge",contextLine:"Do not follow",dedupeKey:key("h-force")});
+    assert(JSON.stringify(await q("tasks:get",{id:mergeTarget.taskId}))===JSON.stringify(mergeBefore),"http: dedupe does not follow a merge into another task");
+    const invalids=[{title:"x".repeat(501)},{title:"TEST bad note",note:4},{title:"TEST bad ref",sourceRef:[]},{title:"TEST bad url",sourceRef:{url:"javascript:alert(1)"}},{title:"TEST long key",dedupeKey:"x".repeat(201)}];
+    for(const invalid of invalids)assert((await post(invalid)).status===400,"http: invalid proposal field is rejected");
+    assert((await post({title:"TEST oversized",note:"x".repeat(40000)})).status===413,"http: oversized byte stream is rejected");
   }
 
   // ── I · exhaustive closed-by-default function authentication ──

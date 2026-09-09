@@ -13,7 +13,9 @@ Helm is a single-user application with shared bearer credentials. It has no acco
 
 A stolen API key grants the owner's application access. It does not grant the Convex administration API. Public functions reject missing or incorrect keys. A deployment without a configured API key also rejects them. `HELM_ALLOW_ANON=1` disables this protection and warns on every public call. The setup wizard removes the opt-out. The old `HELM_REQUIRE_KEY` setting has no effect.
 
-The surface token travels in `X-Helm-Token`. Query-string tokens are rejected. It is not read-only: ingest accepts task content, source metadata, a dedupe key, and a review flag. Ingest defaults to a proposal, but a caller can currently set `needsReview` to false. A matching dedupe key can refresh an existing open task. Treat this as a capture credential. Do not share it with an untrusted party.
+The surface token travels in `X-Helm-Token`. Query-string tokens are rejected. It permits brief reads and bounded proposal submissions. Ingest forces `source: "ingest"`, `status: "inbox"`, and `needsReview: true`. External dedupe keys use an `ingest:` namespace. A repeat refreshes an unreviewed inbox proposal. It does not alter an accepted, triaged, completed, or merged task. Use a new external event key for new work. Treat the token as a capture credential. Do not share it with an untrusted party.
+
+Ingest accepts at most 32 KiB of JSON. Titles are limited to 500 characters. Notes are limited to 10,000 characters. Context lines are limited to 2,000 characters. External dedupe keys are limited to 200 characters. Source URLs must use HTTP or HTTPS without embedded credentials.
 
 HTTP routes present the server's API key to their function calls. A surface caller cannot choose a function name or retrieve environment values. Cross-origin access is allowed for widgets. CORS is not an authentication boundary. Helm adds no application-level rate limits or per-client quotas.
 

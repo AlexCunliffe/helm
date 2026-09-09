@@ -5,7 +5,7 @@
  * never in the repo. The token travels ONLY in the X-Helm-Token header — a
  * query-param token would leak into server logs, browser history and referrers
  * (H3 hardening; writes for the glass arrive via Convex Auth in slice 4.1, so
- * this token never guards anything beyond read + propose).
+ * this token only guards brief reads and bounded proposals).
  *
  *   GET  /brief   → the brief() payload, read-only JSON.
  *   POST /ingest  → generic capture webhook (forward something in → a proposed
@@ -15,12 +15,13 @@
  */
 import { httpRouter } from "convex/server";
 import { httpAction } from "./_generated/server";
-import { api } from "./_generated/api";
+import { api, internal } from "./_generated/api";
+import { parseIngest } from "./lib/ingest";
 import { timingSafeEqual } from "./lib/auth";
 import { GLASS_HTML } from "./glass";
 
 // Server-side hop: http actions present the function-level key themselves —
-// the surface token (checked above the waterline) never becomes a write key.
+// the surface token (checked above the waterline) never becomes an unrestricted task write key.
 const fnKey = () => process.env.HELM_API_KEY;
 
 const CORS = {
@@ -74,33 +75,19 @@ http.route({
   handler: httpAction(async (ctx, req) => {
     if (!authorized(req)) return json({ error: "unauthorized" }, 401);
 
-    let body: Record<string, unknown>;
-    try {
-      body = (await req.json()) as Record<string, unknown>;
-    } catch {
-      return json({ error: "invalid JSON body" }, 400);
-    }
-    if (!body || typeof body.title !== "string" || body.title.trim() === "") {
-      return json({ error: "title (string) is required" }, 400);
-    }
-
-    // Whitelist the capture fields an external caller may set. Defaults make an
-    // ingested item a proposed task (needsReview) tagged source:"ingest".
-    const result = await ctx.runMutation(api.tasks.capture, {
-      apiKey: fnKey(),
-      title: body.title as string,
-      note: typeof body.note === "string" ? body.note : undefined,
-      areaKey: typeof body.areaKey === "string" ? body.areaKey : undefined,
-      contextLine: typeof body.contextLine === "string" ? body.contextLine : undefined,
-      source: typeof body.source === "string" ? body.source : "ingest",
-      sourceRef:
-        body.sourceRef && typeof body.sourceRef === "object"
-          ? (body.sourceRef as { url?: string; threadId?: string; label?: string })
-          : undefined,
-      dedupeKey: typeof body.dedupeKey === "string" ? body.dedupeKey : undefined,
-      needsReview: typeof body.needsReview === "boolean" ? body.needsReview : true,
-    });
-    return json(result);
+    // Bound the byte stream before decoding JSON. Do not buffer an arbitrary request.
+    const reader=req.body?.getReader();
+    if(!reader)return json({error:"JSON body is required"},400);
+    const chunks:Uint8Array[]=[];let length=0;
+    try{
+      while(true){const {done,value}=await reader.read();if(done)break;length+=value.byteLength;
+        if(length>32768){await reader.cancel();return json({error:"Body exceeds 32 KiB"},413);}chunks.push(value);}
+      const bytes=new Uint8Array(length);let offset=0;for(const chunk of chunks){bytes.set(chunk,offset);offset+=chunk.byteLength;}
+      const args=parseIngest(JSON.parse(new TextDecoder().decode(bytes)));
+      const result=await ctx.runMutation(internal.ingest.propose,args);
+      return json(result);
+    }catch{return json({error:"Invalid proposal. Check field types, lengths, source URL, and area key."},400);}
+    finally{reader.releaseLock();}
   }),
 });
 

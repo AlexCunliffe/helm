@@ -263,3 +263,19 @@ Files: HTTP route, internal ingest mutation, regression fixtures, and security d
 Checks: reject malformed and oversized input; force proposal status and source; namespace external dedupe keys; repeat a proposal without duplication; preserve accepted and unrelated tasks; retain existing authentication tests; deploy and run the full development regression.
 
 Done criteria: the surface token retains brief access and bounded proposal submission without broader task-edit authority.
+
+### HTTP ingest result
+
+Completed. The development push and TypeScript check pass. All 199 regression checks pass, followed by both hook suites. The surface token cannot select task status, bypass review, reuse another source's dedupe key, alter an accepted task, or follow a merge into another task. Repeating an unreviewed inbox proposal remains idempotent. Invalid field shapes, unsafe source URLs, and oversized bodies are rejected. Both fixture namespaces are purged after testing.
+
+The internal proposal mutation uses a bounded indexed lookup. HTTP ingest accepts a 32 KiB body, validates its selected fields, and never forwards unrestricted task-write arguments. Security documentation now describes this narrower boundary.
+
+## Stage 3 · Follow-up plan: MCP dependency advisories
+
+Goal: remove the five known transitive dependency advisories through compatible package updates.
+
+Files: MCP lockfile and any necessary dependency metadata.
+
+Checks: inspect the exact package changes; keep application dependencies stable where possible; run the MCP stdio contract, scratch installer acceptance, and full development regression; repeat the dependency audit.
+
+Done criteria: the audit reports no known vulnerabilities and the installed MCP contract still works.
