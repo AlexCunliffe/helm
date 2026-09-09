@@ -817,13 +817,13 @@ async function main() {
   // with the semantic dedupe key → connect → snooze if the draft carried timing.
   const q1 = await m("tasks:capture", {
     title: "TEST follow up with sales lead", dedupeKey: key("q1"),
-    areaKey: "sales", contextLine: "sent the quote Tuesday, no reply yet",
+    areaKey: "work", contextLine: "sent the quote Tuesday, no reply yet",
   });
   await m("tasks:markDone", { id: q1.taskId });
   const fupKey = key("fup:") + q1.taskId + ":call-the-sales-lead-by-phone";
   const q2 = await m("tasks:capture", {
     title: "TEST call the sales lead by phone", dedupeKey: fupKey,
-    areaKey: "sales", status: "next", source: "followup",
+    areaKey: "work", status: "next", source: "followup",
     contextLine: "Quote sent + chased; call if still quiet.",
   });
   assert(q2.created === true, "follow-up: fresh semantic key mints the task");

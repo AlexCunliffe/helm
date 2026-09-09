@@ -46,3 +46,26 @@ The initial area seed requires an explicit `areas` argument. The copied API does
 ### Remaining acceptance work
 
 All twelve configuration, security, and installation slices remain pending. The final documentation set, independent dimensional reviews, review verification, fresh-clone installation test, and release handover remain pending. Production migration, real user-config installation, and public visibility remain controlled by the deployment owner.
+
+
+## Stage 2 · Completed
+
+The development team was approved. The isolated development baseline is live. Its identifiers remain only in ignored local configuration.
+
+Observed checks: TypeScript compilation passed. The regression harness passed all 153 checks. HTTP authentication, function authentication, subscriptions, task operations, and fixture cleanup ran on the new deployment. AI actions passed their missing-key checks; live AI checks are pending a separately configured key.
+
+The first baseline run reached 143 checks before an old `sales` fixture failed against the generic seed. Both follow-up fixtures now use `work`. No assertion was weakened. The rerun passed.
+
+Independent 48-character API and surface credentials were generated, set, and compared in memory. No credential was printed or written to a tracked file. Local environment permissions are restricted to the owner.
+
+Stage completions now use the copied MCP server, pointed exclusively at the isolated development deployment. Existing deployments remain untouched.
+
+## Stage 3 · Slice 1 plan: settings document
+
+Goal: provide one validated settings document with safe defaults and partial section updates.
+
+Files: `convex/validators.ts`, `convex/lib/settings.ts`, `convex/settings.ts`, `convex/meta.ts`, and `scripts/regression.mjs`.
+
+Checks: read defaults on an empty settings store; round-trip partial owner, time, caps, source, and hook updates; reject invalid settings and generic-meta bypasses; restore the prior settings; compile and run the full development harness.
+
+Done criteria: the settings API passes these checks without changing consumers yet.
