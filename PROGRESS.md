@@ -407,3 +407,13 @@ The independent verifier found that JSON-encoded byte estimates can overcount co
 QC repair 9 complete (remaining CVX-03 and CVX-09): every growing read path has an explicit operation capacity. Choice, reconciliation, delegation, and relationship writes reject oversized inputs atomically. Snooze processing commits bounded batches, coordinates continuation ownership, resumes failed jobs, preserves current retained order, and continues past oversized legacy check-ins. Byte accounting uses Convex value sizes.
 
 Validation after the escaped-text correction: TypeScript and development push passed; all 234 backend assertions, 224 always-rollback wake checks, 14 calendar rollback checks, the hosted calendar runtime probe, hook/OAuth/calendar suites, and real MCP tests passed. Independent verification passed 40 mutation/scheduler scenarios, 47 repeated query scenarios, and seven actual stdio MCP cap/exposure checks. No confirmed issue remains in these two findings within the documented capacities.
+
+## QC repair 10 plan: align installation and sweep documentation
+
+Findings: DOC-001, DOC-002, and independently confirmed DOC-003. Describe the implemented local Claude Code capture door. Put cloud selection before the quickstart commands. Distinguish incremental-source watermarks from complete rolling calendar windows and preserve completed calendar prep in every design reference.
+
+Validation: compare the installation order and source procedure with the actual CLI, wizard, MCP schema, and both skill variants. Run the full development suite after this documentation group.
+
+QC repair 10 complete: the capture guide describes local Claude Code, quickstart cloud selection precedes setup, and all sweep design references distinguish incremental boundaries from complete rolling calendar windows. Repeated calendar reads preserve completed prep.
+
+Independent verification confirmed DOC-001/002/003 against both sweep procedures, source presets, MCP forwarding, and backend behavior. All 234 backend assertions and hook/OAuth/calendar suites passed. All 32 tracked Markdown files have resolving local links. All 14 MAJOR and 8 MINOR findings now have verified repairs; fresh repeat reviews follow before Stage 5 completion.

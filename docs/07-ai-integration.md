@@ -27,7 +27,7 @@ The regression suite checks missing-key behavior. With a configured key, it also
 
 ## Client-driven routines
 
-The four skills begin by reading settings. Sweeps use only enabled sources and their named connectors. They bound work with watermarks. Reconcile records the day's planned and unplanned completions. Neither routine sends an external message or writes a knowledge file without authorization.
+The four skills begin by reading settings. Sweeps use only enabled sources and their named connectors. Incremental sources use update watermarks. Calendar prep reads the complete current/next-date window and preserves completed prep; its saved run-start watermark is diagnostic. Reconcile records the day's planned and unplanned completions. Neither routine sends an external message or writes a knowledge file without authorization.
 
 Scheduled-task templates are copies of the interactive procedures. Installing them does not activate a schedule. Their model use belongs to the user's Claude session or plan. The backend's minute and calendar crons do not invoke these source sweeps.
 

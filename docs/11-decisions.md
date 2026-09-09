@@ -4,7 +4,7 @@
 - **D2 · Dedicated storage.** Use a dedicated Convex project for task state.
 - **D3 · Planned and unplanned work.** Keep both in the tasks table. Use `origin` to distinguish them.
 - **D4 · Knowledge boundary.** Propose vault writes for confirmation. Keep operational task state in Convex.
-- **D5 · Incremental capture.** Bound each source sweep with a watermark.
+- **D5 · Bounded capture.** Use update watermarks for incremental sources. Read complete rolling windows for calendar prep. Keep stable occurrence/action keys and preserve completed prep on repeated window reads.
 - **D6 · AI at the edges.** Use the conversational client for orchestration. Optional server actions handle small, bounded transformations.
 - **D7 · Categories as data.** Store areas in a table. Keep developer enums additive.
 - **D8 · Linked stores.** Use relative vault references to connect tasks and knowledge.

@@ -19,7 +19,7 @@ Token HTTP clients ──────────┘
 
 ## Quickstart
 
-Use Node.js 20 or later, a Convex account, and an authenticated Claude Code installation. Use macOS, Linux, or WSL. Each installation creates its own Convex project.
+Use Node.js 20 or later, a Convex account, and an authenticated Claude Code installation. Use macOS, Linux, or WSL. Each installation creates its own Convex project. When `npx convex dev --once` asks, select a new project and a cloud development deployment.
 
 ```sh
 git clone https://github.com/AlexCunliffe/helm.git helm-oss
@@ -30,7 +30,7 @@ npx convex dev --once
 npm run setup
 ```
 
-Follow [the installation guide](docs/install.md) to select a cloud development deployment, approve the Claude integration, run the checks, and open `/brief`. The guide also covers browser access and uninstall.
+Follow [the installation guide](docs/install.md) to approve the Claude integration, run the checks, and open `/brief`. The guide also covers browser access and uninstall.
 
 Read [configuration](docs/configure.md), [capture sources](docs/sources.md), [security](docs/security.md), and [deployment](docs/deploy.md). See [PROGRESS.md](PROGRESS.md) for observed checks and remaining release gates. Server-side AI is optional and requires your own Anthropic API key.
 
