@@ -268,6 +268,11 @@ forward(
   "query",
   "queries:list",
 );
+forward("listPage", "Read indexed task history in creation order, newest first. Without a status, include closed work too. Pass continueCursor as cursor until isDone, even if a filtered page is empty. A page scans at most numItems rows (1–200) within read limits. Use this when list reports a capacity error; keep the same filters across pages.",
+  { status: status.optional(), areaKey: z.string().optional(), origin: origin.optional(),
+    needsReview: z.boolean().optional(), includeSnoozed: z.boolean().optional(),
+    cursor: z.string().nullable().optional(), numItems: z.number().int().min(1).max(200).optional() },
+  "query", "queries:listPage");
 forward("get", "Fetch a single task by id.", { id: z.string() }, "query", "tasks:get");
 forward(
   "listAreas",

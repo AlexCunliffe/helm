@@ -50,3 +50,5 @@ Other metadata includes source watermarks (`sweep:<source>:lastAt`) and legacy i
 ## Planned and unplanned work
 
 `planned` is a forward intention. `adhoc` is work captured after it happened. Both appear in the daily completion record. This makes the daily account include the work that displaced the original plan.
+
+Task reads also use additive `by_status_area`, `by_status_done`, and `by_status_provisional_done` indexes for filtered history, daily completions, and streak existence checks. Existing indexes remain available.

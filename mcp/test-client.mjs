@@ -21,7 +21,7 @@ try {
   await client.connect(transport);
   const { tools } = await client.listTools();
   for (const name of ["getSettings", "updateSettings", "advanceWatermark", "brief", "capture", "chooseToday", "confirmProposed",
-    "dayLog", "defer", "get", "getCheckin", "getWatermark", "inbox", "list", "listAreas", "logCompletion",
+    "dayLog", "defer", "get", "getCheckin", "getWatermark", "inbox", "list", "listPage", "listAreas", "logCompletion",
     "markDone", "reconcileDay", "reconcileOutstanding", "setStatus", "snooze", "todaysPick", "update", "waiting", "wake",
     "merge", "connect", "disconnect", "delegate"])
     assert.ok(tools.some(t => t.name === name), `${name} is registered`);
@@ -61,6 +61,13 @@ try {
   assert.equal(kept.created, false); assert.equal(kept.taskId, first.taskId);
   assert.equal((await call("get", { id: first.taskId })).status, "done");
   assert.ok(Array.isArray(await call("list", { areaKey: area.key })));
+  await call("logCompletion", { title: "TEST MCP page filter", areaKey: area.key, dedupeKey: prefix + "page-filter" });
+  const pageArgs = { areaKey: area.key, status: "done", origin: "planned", numItems: 1 };
+  const emptyPage = await call("listPage", pageArgs);
+  assert.deepEqual(emptyPage.page, []); assert.equal(emptyPage.isDone, false);
+  const nextPage = await call("listPage", { ...pageArgs, cursor: emptyPage.continueCursor });
+  assert.equal(nextPage.page[0]._id, first.taskId, "continue after an empty filtered page");
+
   const bad = await client.callTool({ name: "get", arguments: { id: "not-a-real-id" } });
   assert.equal(bad.isError, true);
   assert.ok(!JSON.stringify(bad).includes(apiKey), "tool errors must not expose the API key");

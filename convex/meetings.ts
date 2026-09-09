@@ -23,6 +23,7 @@ import { requireKey } from "./lib/auth";
 import { readSettings } from "./lib/settings";
 import { dateString } from "./lib/time";
 import { prependNow } from "./lib/nowOrder";
+import { boundedRows } from "./lib/bounds";
 import { meetingFields, meetingDoc } from "./validators";
 
 const apiKeyArg = { apiKey: v.optional(v.string()) };
@@ -131,9 +132,7 @@ export const replaceWindow = internalMutation({
 
 /** Complete mirror reads fail explicitly beyond the supported capacity. */
 export async function readMeetingMirror(ctx: QueryCtx | MutationCtx) {
-  const rows = await ctx.db.query("meetings").withIndex("by_start").take(MEETING_LIMIT + 1);
-  if (rows.length > MEETING_LIMIT) throw new ConvexError("Calendar mirror exceeds 1000 rows. Prune old rows before syncing.");
-  return rows;
+  return await boundedRows(ctx, ctx.db.query("meetings").withIndex("by_start"), "Calendar mirror", MEETING_LIMIT);
 }
 
 /** Reconcile by stable event identity, including events spanning the lower bound. */

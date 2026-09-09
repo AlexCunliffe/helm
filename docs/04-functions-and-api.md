@@ -12,7 +12,7 @@ Full capture dedupe preserves user triage and refreshes re-entry context. Droppe
 
 ## Read operations
 
-`brief` returns the configured daily selection, waiting section, small wins, ageing flags, upcoming work, meetings, and counts. `todaysPick` returns one current task. `dayLog` returns completed planned and unplanned work for a configured-zone date. `inbox`, `waiting`, `list`, and `get` support focused reads. The glass also uses `queries:newToday`.
+`brief` returns the configured daily selection, waiting section, small wins, ageing flags, upcoming work, meetings, and counts. `todaysPick` returns one current task. `dayLog` returns completed planned and unplanned work for a configured-zone date. `inbox`, `waiting`, `list`, and `get` support focused reads. `listPage` provides cursor-based history in newest creation order, including closed work when no status is supplied. Follow its cursor until `isDone`, even after an empty filtered page. Read [capacity and pagination rules](09-scalability.md#read-capacities) before processing large archives. The glass also uses `queries:newToday`.
 
 The `listAreas` tool reads categories. `areas:seedAreas` and `areas:upsertArea` are authenticated backend mutations used by local setup and the glass; they are not MCP tools.
 

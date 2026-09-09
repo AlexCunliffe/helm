@@ -26,6 +26,9 @@ export default defineSchema({
   // completions (origin:adhoc) — same table, two directions of time.
   tasks: defineTable(taskFields)
     .index("by_status", ["status"])
+    .index("by_status_area", ["status", "areaId"])
+    .index("by_status_done", ["status", "doneAt"])
+    .index("by_status_provisional_done", ["status", "provisional", "doneAt"])
     .index("by_area", ["areaId"])
     .index("by_waiting", ["status", "waitingSince"])
     .index("by_done", ["doneAt"])

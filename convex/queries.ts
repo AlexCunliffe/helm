@@ -7,7 +7,8 @@
 import { query } from "./_generated/server";
 import { QueryCtx } from "./_generated/server";
 import { Doc, Id } from "./_generated/dataModel";
-import { v } from "convex/values";
+import { v, ConvexError } from "convex/values";
+import { boundedRows, accountRead, readTask, positiveLimit } from "./lib/bounds";
 import { statusValidator, originValidator, taskView, meetingDoc } from "./validators";
 import { loadAreaMap, toView, isSnoozed, isClosed, byPriority, TaskView } from "./lib/views";
 import { dateString, dayRange, shiftDate, DAY_MS } from "./lib/time";
@@ -37,11 +38,15 @@ const counts = v.object({
   upcoming: v.number(),
 });
 
+const statusCache = new WeakMap<QueryCtx, Map<string, Doc<"tasks">[]>>();
 async function byStatus(ctx: QueryCtx, status: Doc<"tasks">["status"]) {
-  return await ctx.db
-    .query("tasks")
-    .withIndex("by_status", (q) => q.eq("status", status))
-    .collect();
+  let cache = statusCache.get(ctx);
+  if (!cache) { cache = new Map(); statusCache.set(ctx, cache); }
+  const saved = cache.get(status);
+  if (saved) return saved;
+  const rows = await boundedRows(ctx, ctx.db.query("tasks").withIndex("by_status", q => q.eq("status", status)), "Task status partition");
+  cache.set(status, rows);
+  return rows;
 }
 
 /**
@@ -65,8 +70,10 @@ async function computeToday(ctx: QueryCtx, now: number, settings: Settings): Pro
   const morning = await ctx.db.query("checkins")
     .withIndex("by_date_kind", q => q.eq("date", today).eq("kind", "morning")).unique();
   if (morning) {
+    accountRead(ctx, morning);
+    if (morning.chosen.length > 200) throw new ConvexError("Now order exceeds 200 tasks. Choose a smaller current selection.");
     for (const id of morning.chosen) {
-      const t = await ctx.db.get(id);
+      const t = await readTask(ctx, id);
       if (t) add(t);
     }
   }
@@ -95,22 +102,14 @@ async function computeToday(ctx: QueryCtx, now: number, settings: Settings): Pro
  * evening can't quietly inflate the streak.
  */
 async function computeStreak(ctx: QueryCtx, now: number, settings: Settings): Promise<number> {
-  const since = now - 60 * DAY_MS;
-  const done = (
-    await ctx.db
-      .query("tasks")
-      .withIndex("by_done", (q) => q.gte("doneAt", since))
-      .collect()
-  ).filter((t) => t.status === "done" && !t.provisional);
-  const days = new Set(done.map((t) => dateString(t.doneAt!, settings.timezone)));
   let streak = 0;
   for (let i = 0; i <= 60; i++) {
-    const d = shiftDate(dateString(now, settings.timezone), -i);
-    if (days.has(d)) {
-      streak++;
-    } else if (i > 0) {
-      break; // today may legitimately be empty in the morning; don't reset on i=0
-    }
+    const day = shiftDate(dateString(now, settings.timezone), -i);
+    const { start, end } = dayRange(day, settings.timezone);
+    const first = async (provisional: false | undefined) => accountRead(ctx, await ctx.db.query("tasks")
+      .withIndex("by_status_provisional_done", q => q.eq("status", "done").eq("provisional", provisional).gte("doneAt", start).lt("doneAt", end)).first());
+    if ((await first(false)) || (await first(undefined))) streak++;
+    else if (i > 0) break;
   }
   return streak;
 }
@@ -144,10 +143,9 @@ export const brief = query({
 
     // waiting on others, oldest first (by_waiting = [status, waitingSince]).
     const waitingDocs = (
-      await ctx.db
+      await boundedRows(ctx, ctx.db
         .query("tasks")
-        .withIndex("by_waiting", (q) => q.eq("status", "waiting"))
-        .collect()
+        .withIndex("by_waiting", (q) => q.eq("status", "waiting")), "Task query partition")
     ).filter((t) => !isSnoozed(t, now));
 
     // 2-min wins: actionable xs tasks.
@@ -175,20 +173,18 @@ export const brief = query({
     // Mirror inbox()'s predicate exactly: a closed task isn't "awaiting confirm",
     // so the badge can't drift above the list.
     const inboxCount = (
-      await ctx.db
+      await boundedRows(ctx, ctx.db
         .query("tasks")
-        .withIndex("by_review", (q) => q.eq("needsReview", true))
-        .collect()
+        .withIndex("by_review", (q) => q.eq("needsReview", true)), "Task query partition")
     ).filter((t) => !isClosed(t)).length;
 
     // Glass sections (4.4). upcoming = parked tasks by soonest wake — the
     // dashed strip under the stage; meetings = the day-thread markers;
     // energy = the battery state the glass cycles via setMeta.
     const upcomingDocs = (
-      await ctx.db
+      await boundedRows(ctx, ctx.db
         .query("tasks")
-        .withIndex("by_snooze", (q) => q.gt("snoozeUntil", now))
-        .collect()
+        .withIndex("by_snooze", (q) => q.gt("snoozeUntil", now)), "Task query partition")
     )
       .filter((t) => !isClosed(t))
       .sort((a, b) => a.snoozeUntil! - b.snoozeUntil!);
@@ -262,10 +258,9 @@ export const dayLog = query({
     // Only rows still `status:"done"`: doneAt survives a drop, and without the
     // filter the noise the reconcile skill drops would haunt the day forever (H5).
     const done = (
-      await ctx.db
+      await boundedRows(ctx, ctx.db
         .query("tasks")
-        .withIndex("by_done", (q) => q.gte("doneAt", start).lt("doneAt", end))
-        .collect()
+        .withIndex("by_status_done", (q) => q.eq("status", "done").gte("doneAt", start).lt("doneAt", end)), "Task query partition")
     ).filter((t) => t.status === "done");
 
     const planned: TaskView[] = [];
@@ -290,10 +285,9 @@ export const inbox = query({
   handler: async (ctx, { apiKey }) => {
     requireKey(apiKey);
     const areas = await loadAreaMap(ctx);
-    const items = await ctx.db
+    const items = await boundedRows(ctx, ctx.db
       .query("tasks")
-      .withIndex("by_review", (q) => q.eq("needsReview", true))
-      .collect();
+      .withIndex("by_review", (q) => q.eq("needsReview", true)), "Task query partition");
     return items
       .filter((t) => !isClosed(t))
       .sort((a, b) => b.updatedAt - a.updatedAt)
@@ -310,10 +304,9 @@ export const waiting = query({
     requireKey(apiKey);
     const now = Date.now();
     const areas = await loadAreaMap(ctx);
-    const items = await ctx.db
+    const items = await boundedRows(ctx, ctx.db
       .query("tasks")
-      .withIndex("by_waiting", (q) => q.eq("status", "waiting"))
-      .collect();
+      .withIndex("by_waiting", (q) => q.eq("status", "waiting")), "Task query partition");
     return items.filter((t) => !isSnoozed(t, now)).map((t) => toView(t, areas));
   },
 });
@@ -334,11 +327,9 @@ export const newToday = query({
     const now = Date.now();
     const { start, end } = dayRange(dateString(now, settings.timezone), settings.timezone);
     const areas = await loadAreaMap(ctx);
-    const docs = await ctx.db
-      .query("tasks")
-      .withIndex("by_creation_time", (q) => q.gte("_creationTime", start).lt("_creationTime", end))
-      .order("desc")
-      .take((settings.caps?.newToday ?? NEW_TODAY_CAP));
+    const docs = await boundedRows(ctx, ctx.db.query("tasks")
+      .withIndex("by_creation_time", q => q.gte("_creationTime", start).lt("_creationTime", end)).order("desc"),
+      "New tasks", settings.caps?.newToday ?? NEW_TODAY_CAP, false);
     return docs.map((t) => toView(t, areas));
   },
 });
@@ -360,43 +351,21 @@ export const list = query({
     requireKey(args.apiKey);
     const now = Date.now();
     const areas = await loadAreaMap(ctx);
-    const limit = Math.min(args.limit ?? 50, 200);
-
-    // Pick an index: status > area > review(true) > open-actionable union.
-    // Never an unbounded scan of a forever-growing partition.
+    const limit = positiveLimit(args.limit);
+    const areaId = args.areaKey !== undefined ? await resolveAreaId(ctx, args.areaKey) : undefined;
     let docs: Doc<"tasks">[];
     if (args.status !== undefined) {
-      if (args.status === "done" || args.status === "dropped") {
-        // Terminal partitions accumulate for years — bound the read to the
-        // newest `limit` rather than collecting the whole history.
-        docs = await ctx.db
-          .query("tasks")
-          .withIndex("by_status", (q) => q.eq("status", args.status!))
-          .order("desc")
-          .take(limit);
-      } else {
-        docs = await byStatus(ctx, args.status);
-      }
-    } else if (args.areaKey !== undefined) {
-      const areaId = await resolveAreaId(ctx, args.areaKey);
-      docs = await ctx.db
-        .query("tasks")
-        .withIndex("by_area", (q) => q.eq("areaId", areaId))
-        .collect();
+      const index = areaId === undefined
+        ? ctx.db.query("tasks").withIndex("by_status", q => q.eq("status", args.status!))
+        : ctx.db.query("tasks").withIndex("by_status_area", q => q.eq("status", args.status!).eq("areaId", areaId));
+      docs = await boundedRows(ctx, index, "Task list partition");
+    } else if (areaId !== undefined) {
+      docs = await boundedRows(ctx, ctx.db.query("tasks").withIndex("by_area", q => q.eq("areaId", areaId)), "Area history");
     } else if (args.needsReview === true) {
-      // Only `true` rows are stored explicitly; `eq(false)` would miss every
-      // task with the field absent, so `false` falls through to the union below.
-      docs = await ctx.db
-        .query("tasks")
-        .withIndex("by_review", (q) => q.eq("needsReview", true))
-        .collect();
+      docs = await boundedRows(ctx, ctx.db.query("tasks").withIndex("by_review", q => q.eq("needsReview", true)), "Review partition");
     } else {
-      docs = [
-        ...(await byStatus(ctx, "inbox")),
-        ...(await byStatus(ctx, "today")),
-        ...(await byStatus(ctx, "next")),
-        ...(await byStatus(ctx, "waiting")),
-      ];
+      docs = [...(await byStatus(ctx, "inbox")), ...(await byStatus(ctx, "today")),
+        ...(await byStatus(ctx, "next")), ...(await byStatus(ctx, "waiting"))];
     }
 
     // Remaining filters in-memory (already index-narrowed).
@@ -412,5 +381,33 @@ export const list = query({
     if (!args.includeSnoozed) docs = docs.filter((t) => !isSnoozed(t, now));
 
     return docs.sort(byPriority).slice(0, limit).map((t) => toView(t, areas));
+  },
+});
+
+/** Creation-ordered history, including closed work. Empty filtered pages still advance. */
+export const listPage = query({
+  args: { ...apiKeyArg, status: v.optional(statusValidator), areaKey: v.optional(v.string()),
+    origin: v.optional(originValidator), needsReview: v.optional(v.boolean()), includeSnoozed: v.optional(v.boolean()),
+    cursor: v.optional(v.union(v.string(), v.null())), numItems: v.optional(v.number()) },
+  returns: v.object({ page: v.array(taskView), isDone: v.boolean(), continueCursor: v.string() }),
+  handler: async (ctx, args) => {
+    requireKey(args.apiKey);
+    const numItems = positiveLimit(args.numItems);
+    const areaId = args.areaKey !== undefined ? await resolveAreaId(ctx, args.areaKey) : undefined;
+    const index = args.status !== undefined
+      ? areaId !== undefined
+        ? ctx.db.query("tasks").withIndex("by_status_area", q => q.eq("status", args.status!).eq("areaId", areaId))
+        : ctx.db.query("tasks").withIndex("by_status", q => q.eq("status", args.status!))
+      : areaId !== undefined ? ctx.db.query("tasks").withIndex("by_area", q => q.eq("areaId", areaId))
+      : args.needsReview === true ? ctx.db.query("tasks").withIndex("by_review", q => q.eq("needsReview", true))
+      : ctx.db.query("tasks").withIndex("by_creation_time");
+    const result = await index.order("desc").paginate({ numItems, cursor: args.cursor ?? null,
+      maximumRowsRead: 200, maximumBytesRead: 1024 * 1024 });
+    for (const row of result.page) accountRead(ctx, row);
+    const areas = await loadAreaMap(ctx), now = Date.now();
+    const page = result.page.filter(t => (args.origin === undefined || t.origin === args.origin) &&
+      (args.needsReview === undefined || (t.needsReview ?? false) === args.needsReview) &&
+      (args.includeSnoozed || !isSnoozed(t, now))).map(t => toView(t, areas));
+    return { page, isDone: result.isDone, continueCursor: result.continueCursor };
   },
 });

@@ -964,6 +964,41 @@ async function main() {
   }
   assert(ranges[4].start === Date.UTC(2026, 0, 14, 18, 15), "time: fractional offset opens on the correct UTC date");
 
+  console.log("\nU · bounded query and history contracts");
+  const pageArea = "test-page-" + randomUUID().slice(0, 8);
+  await m("areas:upsertArea", { key: pageArea, label: "TEST history", color: "#345678", order: 9999, createOnly: true });
+  extraFixtureAreas.push(pageArea);
+  const olderPageTask = await m("tasks:capture", { title: "TEST older filtered result", areaKey: pageArea, dedupeKey: key("page-old") });
+  await m("tasks:markDone", { id: olderPageTask.taskId });
+  const newerPageTask = await m("tasks:logCompletion", { title: "TEST newer filtered-out result", areaKey: pageArea, dedupeKey: key("page-new") });
+  const filtered = await q("queries:list", { status: "done", areaKey: pageArea, origin: "planned", limit: 1 });
+  assert(filtered.length === 1 && filtered[0]._id === olderPageTask.taskId, "list: filters precede the terminal result limit");
+  const pageArgs = { status: "done", areaKey: pageArea, origin: "planned", numItems: 1 };
+  const emptyPage = await q("queries:listPage", pageArgs);
+  assert(emptyPage.page.length === 0 && !emptyPage.isDone, "history: empty filtered page exposes its continuation");
+  const nextPage = await q("queries:listPage", { ...pageArgs, cursor: emptyPage.continueCursor });
+  assert(nextPage.page.length === 1 && nextPage.page[0]._id === olderPageTask.taskId, "history: continuation reaches an older matching result");
+  const allPage = await q("queries:listPage", { status: "done", areaKey: pageArea, numItems: 20 });
+  assert(allPage.isDone && allPage.page.map(t => t._id).join() === [newerPageTask.taskId, olderPageTask.taskId].join(), "history: complete page uses newest creation order");
+  const largeIds = [];
+  for (let i = 0; i < 4; i++) largeIds.push((await m("tasks:logCompletion", { title: "TEST byte-limited history", note: "x".repeat(600 * 1024), areaKey: pageArea, doneAt: SAFE_NOON, dedupeKey: key("large-page-" + i) })).taskId);
+  const seenPages = [], cursors = new Set(); let historyCursor = null, historyDone = false;
+  for (let i = 0; i < 10 && !historyDone; i++) {
+    const page = await q("queries:listPage", { status: "done", areaKey: pageArea, numItems: 200, cursor: historyCursor });
+    seenPages.push(...page.page.map(t => t._id)); historyDone = page.isDone;
+    assert(historyDone || !cursors.has(page.continueCursor), "history: byte-limited cursor makes progress");
+    cursors.add(page.continueCursor); historyCursor = page.continueCursor;
+  }
+  assert(historyDone && seenPages.length === 6 && new Set(seenPages).size === 6 && largeIds.every(id => seenPages.includes(id)), "history: byte-limited pages retain every large document exactly once");
+
+  await throws(() => q("queries:list", { limit: 0 }), "list: zero limit rejected");
+  await throws(() => q("queries:listPage", { numItems: 201 }), "history: excessive page size rejected");
+  let capacityProbe = false;
+  try { execFileSync("npx", ["--no-install", "convex", "run", "testing:readCapacityProbe", "{}"], { cwd: ROOT, encoding: "utf8" }); }
+  catch (error) { capacityProbe = String(error.stderr ?? "").includes("READ_CAPACITY_PROBE_PASSED_ROLLED_BACK"); }
+  assert(capacityProbe, "capacity: complete reads reject overflow; large history paginates; byte guard stops early; all writes roll back");
+
+
   // ── T · area seed: empty-store probe rolls back the whole transaction ──
   console.log("\nT · area seed");
   const originalAreas = await q("areas:listAreas", { includeArchived: true });

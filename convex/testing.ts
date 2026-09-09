@@ -14,6 +14,7 @@ import { readSettings } from "./lib/settings";
 import { replaceMeetingWindow, readMeetingMirror, readUpcomingMeetings, promoteMeetingPrep } from "./meetings";
 import { removeFromNow } from "./lib/nowOrder";
 import { loadCalendarWindow } from "./lib/calendar";
+import { boundedRows } from "./lib/bounds";
 import { checkinDoc } from "./validators";
 
 export const purgeTestData = internalMutation({
@@ -177,5 +178,31 @@ export const calendarRuntimeProbe = internalAction({
     };
     const meetings = await loadCalendarWindow("fixture-only", now, now + 3600_000, request);
     return { meetings: meetings.length, requests, timed };
+  },
+});
+
+/** Test bounded reads against >1000 stored rows, then roll back the entire fixture. */
+export const readCapacityProbe = internalMutation({
+  args: {}, returns: v.null(),
+  handler: async (ctx) => {
+    const area = await ctx.db.query("areas").withIndex("by_key").first();
+    if (!area) throw new ConvexError("Seed an area before running the capacity probe.");
+    const prefix = "test:read-capacity-probe:", now = Date.now();
+    for (let i = 0; i < 1001; i++) await ctx.db.insert("tasks", { title: "TEST history row", areaId: area._id,
+      status: "done", origin: "adhoc", source: "test", doneAt: now, updatedAt: now, dedupeKey: prefix + i });
+    const history = () => ctx.db.query("tasks").withIndex("by_dedupe", q => q.gte("dedupeKey", prefix).lt("dedupeKey", prefix + "\uffff"));
+    let rejected = false;
+    try { await boundedRows(ctx, history(), "Fixture history"); }
+    catch (error) { rejected = error instanceof ConvexError && String(error.data).includes("exceeds 1000 rows"); }
+    if (!rejected) throw new ConvexError("READ_CAPACITY_PROBE_FAILED: unbounded partition");
+    const page = await history().paginate({ cursor: null, numItems: 20, maximumRowsRead: 200, maximumBytesRead: 1024 * 1024 });
+    if (page.page.length !== 20 || page.isDone || !page.continueCursor) throw new ConvexError("READ_CAPACITY_PROBE_FAILED: history page");
+    let consumed = 0;
+    async function* largeRows() { for (let i = 0; i < 20; i++) { consumed++; yield { text: "x".repeat(1024 * 1024) }; } }
+    rejected = false;
+    try { await boundedRows({}, largeRows(), "Fixture bytes"); }
+    catch (error) { rejected = error instanceof ConvexError && String(error.data).includes("4 MiB"); }
+    if (!rejected || consumed > 5) throw new ConvexError("READ_CAPACITY_PROBE_FAILED: byte guard");
+    throw new ConvexError("READ_CAPACITY_PROBE_PASSED_ROLLED_BACK");
   },
 });

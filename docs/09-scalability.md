@@ -21,3 +21,11 @@ Additive-only by default: new optional fields, new tables. Never repurpose a fie
 
 ## Keep the seams honest
 Don't collapse these seams for short-term convenience (e.g. hardcoding an area list in a query). If you catch yourself writing a closed list of something the spec says extends — stop, use the data-driven path.
+
+## Read capacities
+
+Complete task queries support at most 1000 rows in each selected index partition. An operation also has a shared task/meeting read budget of 4000 rows and 4 MiB of serialized data. A complete summary fails with a clear capacity error when a bound is exceeded; it does not report a truncated total. Display caps apply after complete bounded reads. Areas retain their separate 100-row limit.
+
+Use MCP `listPage` for larger task history. Keep the filters unchanged. Pass each `continueCursor` as the next `cursor`. Continue until `isDone` is true, including after an empty filtered page. `numItems` is an integer from 1 to 200 and defaults to 50. Each page scans up to the requested rows, with additional 200-row and 1 MiB database read bounds. Filters can produce fewer returned items. Pages use newest creation order; `list` uses priority order. Without a status filter, `listPage` includes closed work too.
+
+The `list` query applies status, area, origin, review, and snooze filters before its final result limit. Use a status and area together to narrow its compound index. A small result limit does not increase the supported candidate capacity. Daily streaks use indexed existence checks, so they do not read the full completion archive.

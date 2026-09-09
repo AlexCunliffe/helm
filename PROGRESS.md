@@ -385,3 +385,13 @@ Validation: isolated multi-page success/failure and capacity fixtures; rollback-
 QC repair 7 complete (CVX-04, CVX-06, and independently confirmed ROOT-04): the mirror reads complete bounded pages before writing; rejects malformed response roots and incomplete/invalid snapshots; reconciles stable event IDs; preserves matching prep state; repairs duplicates; and prunes missing/expired rows. Long ongoing meetings remain visible.
 
 Regression mirror checks now use an always-rollback transaction, preserving real meeting IDs, links, stamps, tasks, settings, and check-ins. The independent verifier caught a malformed-response gap in the first draft; its corrected version passed 36 calendar scenarios and all 29 Now-order scenarios. TypeScript, development push, 213 top-level backend assertions, 14 rollback probes, a network-free hosted pagination probe, and hook/OAuth/calendar fixtures passed. No live Google account connection was made.
+
+## QC repair 8 plan: bound reads and paginate task history
+
+Findings: CVX-02 and the query portion of CVX-03. Apply list filters before result limits. Add compound indexes and a cursor-based history query/MCP tool. Bound complete indexed reads by rows and bytes with explicit overflow errors; preserve honest summary counts. Reuse status reads and compute streaks through indexed daily existence checks.
+
+Validation: older filtered terminal matches, multi-page history including empty filtered pages, explicit row/byte overflow, unchanged aggregate counts within capacity, and large-history access. Run TypeScript, development push, backend/MCP suites, and independent verification. Mutation batching and remaining write bounds follow in a separate slice before CVX-03 is marked fixed.
+
+QC repair 8 complete (CVX-02; query portion of CVX-03): filters precede result limits, indexed history has a continuation API, and complete reads enforce explicit row/byte capacities without returning inaccurate counts. Daily existence checks avoid reading the completion archive for streaks.
+
+Validation: 47 independent query/MCP scenarios passed. TypeScript, development push, 224 backend assertions, hook/OAuth/calendar suites, and real stdio MCP tests passed. The hosted byte-limit test returned four 600 KiB records and two small records exactly once across three pages. Mutation capacities and background batching remain open for CVX-03/CVX-09.
