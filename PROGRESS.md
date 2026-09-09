@@ -247,3 +247,19 @@ Files: docs/security.md and SECURITY.md.
 Checks: compare each claim with auth, HTTP, browser, MCP, hook, AI, installer, and rotation code; run the documented non-mutating rotation command; preserve the distinction between API and surface credentials.
 
 Done criteria: the threat model states what each credential can do and identifies its stored copies without promising stronger isolation than the code provides.
+
+### Slice 12 result
+
+Completed. The security model was checked against the implementation. It describes API and surface permissions, function-argument logging, browser storage, plaintext Claude configuration and backups, hook content, AI data flow, and key rotation. The documented rotation preview passed without changes. The approved rotation command was exercised in slice 7.
+
+The review exposed an HTTP boundary to tighten: the surface token currently accepts a review flag and shares capture dedupe keys with other sources. This is documented honestly and will be restricted before independent QC. The MCP dependency audit also reports five affected transitive packages with compatible fixes available.
+
+## Stage 3 · Follow-up plan: restrict HTTP ingest
+
+Goal: let the surface token create or refresh unreviewed ingest proposals only. Prevent it from modifying accepted tasks or another source's tasks.
+
+Files: HTTP route, internal ingest mutation, regression fixtures, and security documentation.
+
+Checks: reject malformed and oversized input; force proposal status and source; namespace external dedupe keys; repeat a proposal without duplication; preserve accepted and unrelated tasks; retain existing authentication tests; deploy and run the full development regression.
+
+Done criteria: the surface token retains brief access and bounded proposal submission without broader task-edit authority.
