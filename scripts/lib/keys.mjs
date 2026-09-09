@@ -2,7 +2,7 @@ import { randomBytes } from "node:crypto";
 import { timingSafeEqual } from "node:crypto";
 export const mintKey = () => randomBytes(24).toString("hex");
 export function setSecret(dev, name, value) {
-  if (!["HELM_API_KEY", "HELM_SURFACE_TOKEN", "ANTHROPIC_API_KEY"].includes(name)) throw new Error("Unsupported secret name.");
+  if (!["HELM_API_KEY", "HELM_SURFACE_TOKEN", "ANTHROPIC_API_KEY", "GOOGLE_CAL_REFRESH_TOKEN"].includes(name)) throw new Error("Unsupported secret name.");
   if (typeof value !== "string" || !value || value.includes("\n") || value.includes("\r")) throw new Error("Use a non-empty, single-line secret.");
   // Convex reads the value from stdin. It is absent from argv and shell history.
   dev.cli(["env", "set", name], { input: value });

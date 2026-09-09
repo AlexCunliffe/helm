@@ -82,3 +82,9 @@ For suspected exposure, revoke or rotate the affected credential. Review deploym
 ## Vulnerability reports
 
 Read [SECURITY.md](../SECURITY.md). Keep exploit details and private task data out of public issues. This reference implementation has no support agreement or guaranteed response time.
+
+## Optional calendar authorization
+
+The [calendar helper](../scripts/google-cal-auth.mjs) operates only on the selected cloud development deployment. It listens on `127.0.0.1:8765`. Register `http://127.0.0.1:8765` as the OAuth web client's redirect URI. Each run validates an unpredictable state value and sends a PKCE challenge and verifier, following [Google's OAuth guidance](https://developers.google.com/identity/protocols/oauth2/native-app). Unrelated callbacks do not consume the request. A repeated callback cannot exchange another code.
+
+The helper stores the refresh token through Convex CLI stdin. It verifies the stored value before reporting success. It prints no token response or credential-bearing subprocess error. Its automated checks use synthetic OAuth responses; they do not establish a live Google account connection.

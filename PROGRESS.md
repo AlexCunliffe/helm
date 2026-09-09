@@ -327,3 +327,13 @@ The independent repair verifier found an ownership race in the first draft. The 
 QC repair 1 complete (ROOT-02 and CODE-001): regression-owned check-ins cannot adopt user records, normal edits revoke fixture ownership, cleanup rejects changed snapshots, and test-added caps are cleared during restoration. The exact UUID-scoped hook fixture namespace is accepted by cleanup. The one failed synthetic hook fixture and its scratch directory were removed after that compatibility check.
 
 Validation: independent verifier passed 16 ownership/race/restoration assertions; TypeScript passed; development push passed; full suite passed 204 assertions and both hook suites, including cleanup. The full baseline QC ledger is in [docs/qc/2026-09-09-review.md](docs/qc/2026-09-09-review.md). Remaining confirmed findings stay open there.
+
+## QC repair 2 plan: bind OAuth callbacks and protect credentials
+
+Findings: SEC-01 and SEC-02. Restrict the optional calendar helper to the selected cloud development deployment. Bind its listener to loopback. Validate per-run state and PKCE. Reject unrelated callbacks without consuming the valid flow. Store the refresh token through CLI stdin. Redact every exchange and storage failure. Report success only after verified storage.
+
+Validation: isolated success, invalid-state, replay, PKCE, provider failure, missing-refresh-token, and storage failure fixtures. Run the helper's help command and the full development suite. No live Google account or production deployment is involved.
+
+QC repair 2 complete (SEC-01 and SEC-02): the optional calendar authorization helper now uses loopback, per-run state, PKCE, one-use callbacks, safe credential storage, and redacted failures. Existing secret-setting behavior is preserved.
+
+Validation: helper help command passed; isolated OAuth fixtures passed; an independent verifier passed 32 additional callback, replay, storage, and failure checks; the full development suite passed 204 backend assertions, both hook suites, and OAuth fixtures. No live Google account connection was made.
