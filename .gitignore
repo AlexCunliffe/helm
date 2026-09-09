@@ -15,3 +15,6 @@ convex/_generated/
 .oss-denylist
 scripts/oss-denylist.txt
 settings.local.json
+
+# Private installation records and recovery hashes
+.helm-local/

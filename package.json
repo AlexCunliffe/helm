@@ -16,7 +16,11 @@
     "test:rotate-key": "node scripts/test-rotate-key.mjs",
     "test:hook": "node scripts/test-hook.mjs",
     "setup": "node scripts/setup.mjs",
-    "test:setup": "node scripts/test-setup.mjs"
+    "test:setup": "node scripts/test-setup.mjs",
+    "install:claude": "node scripts/install-claude.mjs",
+    "uninstall:claude": "node scripts/uninstall-claude.mjs",
+    "skills:check": "node scripts/install-claude.mjs --check",
+    "test:install": "node scripts/test-install-claude.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.110.0",

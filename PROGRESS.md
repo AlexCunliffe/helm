@@ -229,3 +229,21 @@ Files: install and uninstall commands, shared file-safety and manifest helpers, 
 Checks: show every proposed global write; decline without writes; dry-run and check preserve all files; register MCP through the Claude CLI in an isolated staging home; preserve unrelated configuration; skip disabled hooks; retain backups; detect drift; refuse to overwrite later user edits on uninstall; restore the original files; redact credentials in all output.
 
 Done criteria: a scratch installation works and uninstall restores the prior configuration. The installer makes no deployment changes; the approved setup wizard owns that tier.
+
+### Slice 11 result
+
+Completed. All installer acceptance checks pass in scratch homes. The actual Claude CLI registered a staged MCP entry. The installed server answered settings and brief calls. Every global file had a preview and approval. Declining all changes preserved the files. Dry-run and check made no writes. Re-runs were idempotent. The disabled hook file stayed untouched. The enabled hook preserved unrelated hooks. Backups and private file modes were verified.
+
+Uninstall restored the original bytes and removed files created by Helm. A later user edit was preserved and reported for manual reconciliation. Symbolic-link paths were rejected before any installation write. A custom Claude config directory also passed. API keys and existing secret values were absent from output. Installation records contain recovery paths and hashes, not key values. The full backend regression passed all 188 checks, followed by the hook suites.
+
+The CLI registration runs inside an isolated temporary home because the CLI also initializes preference metadata. Only the approved MCP entry is merged into the selected configuration. No real user-global files were opened or installed during acceptance. Backups remain after uninstall. Files edited outside the installer require manual reconciliation before a later update.
+
+## Stage 3 · Slice 12 plan: security documentation
+
+Goal: document the actual trust boundary, credential storage, logging exposure, hook content, dependency boundary, and development rotation procedure.
+
+Files: docs/security.md and SECURITY.md.
+
+Checks: compare each claim with auth, HTTP, browser, MCP, hook, AI, installer, and rotation code; run the documented non-mutating rotation command; preserve the distinction between API and surface credentials.
+
+Done criteria: the threat model states what each credential can do and identifies its stored copies without promising stronger isolation than the code provides.
