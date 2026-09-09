@@ -39,7 +39,8 @@ export default defineSchema({
   projects: defineTable(projectFields).index("by_status", ["status"]),
 
   // Accountability log — one morning + one evening row per day.
-  checkins: defineTable(checkinFields).index("by_date", ["date"]),
+  checkins: defineTable(checkinFields).index("by_date", ["date"])
+    .index("by_date_kind", ["date", "kind"]),
 
   // Rolling mirror of today+tomorrow's calendar (4.2, D12) — markers on the
   // day thread + T-30 prep promotion. Replaced per sync window, never grows.

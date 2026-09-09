@@ -309,7 +309,7 @@ async function main() {
 
   // ── D2 · snooze-waker returns-to-Now (H4 + 4.5) ──
   console.log("\nD2 · snooze-waker returns-to-Now (H4 + 4.5)");
-  const todayLondon = new Date().toLocaleDateString("en-CA", { timeZone: "Europe/London" });
+  const todayLondon = new Date().toLocaleDateString("en-CA", { timeZone: (await q("settings:get")).timezone });
   const priorMorning = await q("checkins:getCheckin", { date: todayLondon, kind: "morning" });
   try {
     const w1 = await m("tasks:capture", { title: "TEST wake me", dedupeKey: key("w1") });
@@ -337,6 +337,14 @@ async function main() {
       "waker: woken open task promoted to today with wokeAt stamped");
     const pick = await q("queries:todaysPick", {});
     assert(pick && pick._id === w1.taskId, "waker: woken task leads todaysPick (Back as promised)");
+    await m("tasks:defer", { id: w1.taskId, status: "waiting" });
+    assert((await q("queries:todaysPick"))?._id !== w1.taskId, "Now: delegated choice no longer leads");
+    await m("tasks:setStatus", { id: w1.taskId, status: "today" });
+    await m("checkins:upsertCheckin", { date: todayLondon, kind: "morning", chosen: [w1.taskId, ...((await q("checkins:getCheckin", { date: todayLondon, kind: "morning" }))?.chosen ?? [])] });
+    await m("tasks:defer", { id: w1.taskId, status: "someday" });
+    assert((await q("queries:todaysPick"))?._id !== w1.taskId, "Now: deferred choice no longer leads");
+    await m("tasks:setStatus", { id: w1.taskId, status: "today" });
+    await m("checkins:upsertCheckin", { date: todayLondon, kind: "morning", chosen: [w1.taskId, ...((await q("checkins:getCheckin", { date: todayLondon, kind: "morning" }))?.chosen ?? [])] });
     // A timed chase resurfaces in the waiting pile — it doesn't fake actionability
     assert(w3doc.status === "waiting" && w3doc.waitingSince !== undefined
       && typeof w3doc.wokeAt === "number",
@@ -404,7 +412,9 @@ async function main() {
   assert((await q("tasks:get", { id: f1.taskId })).status === "inbox", "checkins: invalid dates leave task status unchanged");
   try { await m("tasks:merge", { sourceId: f1.taskId, targetId: f1.taskId }); assert(false, "errors: expected merge refusal"); }
   catch (error) { assert(typeof error.data === "string" && error.data.includes("can't merge into itself"), "errors: expected failures expose safe ConvexError data"); }
+  await m("tasks:setStatus", { id: f1.taskId, status: "waiting" });
   await m("checkins:chooseToday", { taskIds: [f1.taskId, fDone.taskId], date: SAFE_DATE });
+  assert((await q("tasks:get", { id: f1.taskId })).waitingSince === undefined, "chooseToday: clears the previous waiting clock");
   const fMorning = await q("checkins:getCheckin", { date: SAFE_DATE, kind: "morning" });
   assert(fMorning.chosen.length === 1 && fMorning.chosen[0] === f1.taskId,
     "chooseToday: records only promotable picks (closed excluded)");
@@ -672,6 +682,7 @@ async function main() {
   // once) — a seeded-row assertion failing here with real meetings present is
   // that race; the restore in `finally` is then a no-op-equivalent. Rare
   // enough to tolerate: re-run rather than engineering around the cron.
+  const beforePrepMorning = await q("checkins:getCheckin", { date: todayLondon, kind: "morning" });
   const realMeetings = (await q("meetings:upcomingMeetings", { horizonHours: 72 }))
     .map(({ eventId, title, startAt, endAt, url }) => ({ eventId, title, startAt, endAt, ...(url ? { url } : {}) }));
   try {
@@ -693,15 +704,27 @@ async function main() {
     const relinked = (await q("meetings:upcomingMeetings", {})).find((x) => x.eventId === "test:reg:evt1");
     assert(relinked.prepTaskId === prep.taskId && relinked.title.includes("moved"),
       "meetings: re-sync replaces rows but keeps the prep link");
+    // Ensure an ordinary choice already occupies the head, even if the minute
+    // cron promoted prep before this manual call. Re-linking explicitly re-arms.
+    const ordinary = await m("tasks:capture", { title: "TEST ordinary morning choice", dedupeKey: key("ordinary-before-prep"), status: "today" });
+    await m("checkins:upsertCheckin", { date: todayLondon, kind: "morning", chosen: [ordinary.taskId] });
+    await m("tasks:setStatus", { id: prep.taskId, status: "waiting" });
+    await m("meetings:linkPrep", { eventId: "test:reg:evt1", taskId: prep.taskId });
     const promo1 = JSON.parse(execFileSync("npx", ["convex", "run", "meetings:promotePrep"], { cwd: ROOT, encoding: "utf8" }));
     const prepDoc = await q("tasks:get", { id: prep.taskId });
     // The minute cron can win this race. Either caller produces the same state.
     assert(Number.isInteger(promo1.promoted) && promo1.promoted >= 0 && prepDoc.status === "today" && prepDoc.urgent === true,
       "meetings: T-30 promotes the linked prep to today+urgent");
+    assert((await q("queries:todaysPick"))?._id === prep.taskId, "meetings: prep takes the head ahead of a morning choice");
+    assert(prepDoc.waitingSince === undefined, "meetings: prep clears the previous waiting clock");
+    await m("tasks:defer", { id: prep.taskId, status: "next" });
     const promo2 = JSON.parse(execFileSync("npx", ["convex", "run", "meetings:promotePrep"], { cwd: ROOT, encoding: "utf8" }));
     const stillPromoted = (await q("meetings:upcomingMeetings", {})).find((x) => x.eventId === "test:reg:evt1");
     assert(stillPromoted.prepPromotedAt !== undefined && promo2.promoted === 0,
       "meetings: promotion fires once (demotion isn't fought)");
+
+    assert((await q("tasks:get", { id: prep.taskId })).status === "next" &&
+      (await q("queries:todaysPick"))?._id === ordinary.taskId, "meetings: deliberate later demotion is respected");
 
     // OAuth gate open → the sync skips quietly instead of error-spamming the cron.
     const sync = JSON.parse(execFileSync("npx", ["convex", "run", "meetings:syncGoogleCalendar"], { cwd: ROOT, encoding: "utf8" }));
@@ -712,6 +735,7 @@ async function main() {
     }
   } finally {
     seedEvents(realMeetings); // restore whatever was really in the window
+    await m("checkins:upsertCheckin", { date: todayLondon, kind: "morning", chosen: beforePrepMorning?.chosen ?? [] });
   }
 
   // ── K · AI action layer (4.3) ──

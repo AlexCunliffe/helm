@@ -32,11 +32,8 @@ async function findCheckin(
   date: string,
   kind: "morning" | "evening",
 ) {
-  const rows = await ctx.db
-    .query("checkins")
-    .withIndex("by_date", (q) => q.eq("date", date))
-    .collect();
-  return rows.find((c) => c.kind === kind) ?? null;
+  return await ctx.db.query("checkins")
+    .withIndex("by_date_kind", q => q.eq("date", date).eq("kind", kind)).unique();
 }
 
 export const getCheckin = query({
@@ -109,7 +106,7 @@ export const chooseToday = mutation({
     for (const id of taskIds) {
       const t = await ctx.db.get(id);
       if (t && t.status !== "done" && t.status !== "dropped") {
-        if (t.status !== "today") await ctx.db.patch(id, { status: "today", updatedAt: now });
+        if (t.status !== "today") await ctx.db.patch(id, { status: "today", waitingSince: undefined, updatedAt: now });
         promoted.push(id);
       }
     }

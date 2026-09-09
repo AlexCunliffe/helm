@@ -52,7 +52,8 @@ async function computeToday(ctx: QueryCtx, now: number, settings: Settings): Pro
   const ordered: Doc<"tasks">[] = [];
   const seen = new Set<Id<"tasks">>();
   const add = (t: Doc<"tasks">) => {
-    if (!seen.has(t._id) && !isSnoozed(t, now) && !isClosed(t)) {
+    if (!seen.has(t._id) && !isSnoozed(t, now) &&
+        (t.status === "today" || t.status === "next" || t.status === "inbox")) {
       seen.add(t._id);
       ordered.push(t);
     }
@@ -60,11 +61,8 @@ async function computeToday(ctx: QueryCtx, now: number, settings: Settings): Pro
 
   // 1. Explicit choice for today, if a morning check-in recorded one.
   const today = dateString(now, settings.timezone);
-  const checkins = await ctx.db
-    .query("checkins")
-    .withIndex("by_date", (q) => q.eq("date", today))
-    .collect();
-  const morning = checkins.find((c) => c.kind === "morning");
+  const morning = await ctx.db.query("checkins")
+    .withIndex("by_date_kind", q => q.eq("date", today).eq("kind", "morning")).unique();
   if (morning) {
     for (const id of morning.chosen) {
       const t = await ctx.db.get(id);

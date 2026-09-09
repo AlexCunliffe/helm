@@ -24,6 +24,7 @@ import { isClosed } from "./lib/views";
 import { requireKey } from "./lib/auth";
 import { dateString } from "./lib/time";
 import { readSettings } from "./lib/settings";
+import { removeFromNow } from "./lib/nowOrder";
 
 // Every public function takes this and calls requireKey first (4.1, D15).
 const apiKeyArg = { apiKey: v.optional(v.string()) };
@@ -76,6 +77,10 @@ async function applyStatus(
     patch.needsReview = false;
   }
   await ctx.db.patch(id, patch);
+  if (status !== "today") {
+    const settings = await readSettings(ctx);
+    await removeFromNow(ctx, dateString(now, settings.timezone), id);
+  }
 }
 
 /**

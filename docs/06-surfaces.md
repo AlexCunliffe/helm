@@ -16,3 +16,5 @@ Read-only widgets can consume `GET /brief` with the surface token. A phone widge
 A read-only surface should use the HTTP brief. The surface token also permits bounded ingest proposals, so it must still be protected. An editing client requires the more powerful API key. Read [security](security.md).
 
 The interface preserves source links and short re-entry context. Deferral is an ordinary choice. Completed unplanned work belongs in the daily record alongside planned work.
+
+Meeting prep promoted inside the configured lead window takes the head of the explicit Now order. Multiple promotions use meeting-start order. Later deliberate status changes remove the task from that order; the one-time meeting stamp prevents automatic re-promotion. Waiting and someday tasks cannot appear in the actionable shortlist. The maintained head holds at most 200 IDs; other promoted tasks remain in today and are available through task reads.

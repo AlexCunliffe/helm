@@ -15,10 +15,12 @@
  */
 import { mutation, query, internalMutation, internalAction } from "./_generated/server";
 import { internal } from "./_generated/api";
-import { Doc } from "./_generated/dataModel";
+import { Doc, Id } from "./_generated/dataModel";
 import { v, ConvexError } from "convex/values";
 import { requireKey } from "./lib/auth";
 import { readSettings } from "./lib/settings";
+import { dateString } from "./lib/time";
+import { prependNow } from "./lib/nowOrder";
 import { meetingFields, meetingDoc } from "./validators";
 
 const apiKeyArg = { apiKey: v.optional(v.string()) };
@@ -238,6 +240,7 @@ export const promotePrep = internalMutation({
       .withIndex("by_start", (q) => q.gte("startAt", now).lt("startAt", now + prepLead))
       .collect();
     let promoted = 0;
+    const promotedIds: Id<"tasks">[] = [];
     for (const m of soon) {
       if (!m.prepTaskId || m.prepPromotedAt !== undefined) continue;
       const task: Doc<"tasks"> | null = await ctx.db.get(m.prepTaskId);
@@ -245,12 +248,34 @@ export const promotePrep = internalMutation({
         await ctx.db.patch(task._id, {
           status: "today",
           urgent: true,
+          waitingSince: undefined,
           snoozeUntil: undefined, // a parked prep still surfaces for its meeting
           updatedAt: now,
         });
         promoted++;
+        promotedIds.push(task._id);
       }
       await ctx.db.patch(m._id, { prepPromotedAt: now, updatedAt: now });
+    }
+    if (promotedIds.length) {
+      const date = dateString(now, settings.timezone);
+      const morning = await ctx.db.query("checkins")
+        .withIndex("by_date_kind", q => q.eq("date", date).eq("kind", "morning")).unique();
+      const chosen = new Set(morning?.chosen ?? []);
+      const newlyPromoted = new Set(promotedIds);
+      const prepOrder: Id<"tasks">[] = [];
+      // Keep earlier, still-active prep ahead of meetings that enter the lead
+      // window on a later cron pass. Deliberate demotions have left chosen.
+      for (const meeting of soon) {
+        if (!meeting.prepTaskId) continue;
+        if (newlyPromoted.has(meeting.prepTaskId)) prepOrder.push(meeting.prepTaskId);
+        else if (meeting.prepPromotedAt !== undefined && chosen.has(meeting.prepTaskId)) {
+          const task = await ctx.db.get(meeting.prepTaskId);
+          if (task?.status === "today" && (task.snoozeUntil === undefined || task.snoozeUntil <= now))
+            prepOrder.push(task._id);
+        }
+      }
+      await prependNow(ctx, date, prepOrder);
     }
     return { promoted };
   },

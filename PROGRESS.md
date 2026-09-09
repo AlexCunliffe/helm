@@ -363,3 +363,13 @@ Validation: verify the real MCP schema and completed/dropped/merged capture beha
 QC repair 5 complete: calendar prep reads the full rolling window independently of update watermarks, uses stable occurrence identities, and atomically preserves completed work on repeated reads. Default capture reactivation remains available for other sources. Both skill variants and references match.
 
 Validation: TypeScript and development push passed; 214 backend assertions, hook/OAuth suites, and real stdio MCP tests passed. Independent verification passed 15 actual-handler, nine stdio-to-mocked-handler, and ten procedural calendar scenarios. The latter verify the written procedure with fixtures; they are not a native conversational sweep run.
+
+## QC repair 6 plan: keep Now actionable and promote imminent prep
+
+Findings: CVX-01, CVX-05, and CVX-07. Filter explicit choices by actionable status. Remove deliberate demotions from the current order. Prepend newly promoted meeting prep in meeting-start order, with a bounded maintained head. Clear waiting timestamps when chooseToday or prep leaves waiting. Add an index for one check-in kind on one date.
+
+Validation: development checks for choice-to-waiting/someday transitions, renewed waiting clocks, prep ahead of existing choices, and deliberate demotion after promotion. Independently verify full-cap behavior and the one-time promotion stamp. Run TypeScript, development push, and the full regression suite.
+
+QC repair 6 complete: waiting and someday choices cannot lead Now; deliberate non-today transitions remove their explicit priority; choose/prep clears stale waiting clocks. Meeting prep leads ordinary choices and retains chronological priority across later cron passes. Deliberate demotions, completions, snoozes, and removal from the order are respected.
+
+An independent verifier found and reproduced the cross-pass ordering edge in the first draft. The corrected implementation passed all 29 independent scenarios. TypeScript, the development push, 220 backend assertions, and hook/OAuth suites passed after the correction. The order helper uses a Convex-compatible module filename.
