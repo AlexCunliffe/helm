@@ -2,9 +2,9 @@
 
 ## HANDOVER
 
-The configurable open-source implementation is committed in the private personal [Helm repository](https://github.com/AlexCunliffe/helm). Each installer owns a separate Convex project. The development projects used for this work are acceptance fixtures, not a shared service or a dependency of other installations.
+The configurable open-source implementation is committed in the public [Helm repository](https://github.com/AlexCunliffe/helm). Each installer owns a separate Convex project. The development projects used for this work are acceptance fixtures, not a shared service or a dependency of other installations.
 
-Stages 1–7 are complete. The fresh GitHub installation passed dependency setup, cloud development provisioning, the six-step wizard, eight separately approved scratch-home writes, regression and MCP checks, browser checks, and uninstall/reinstall restoration. Native `/brief` called `getSettings` and `brief` through the installed MCP server and returned the expected empty brief without permission errors. Both temporary acceptance projects and scratch directories were deleted after verification. The approved real-home Claude integration passed development verification and was then restored to its prior configuration at the owner's request. All three task-created cloud projects and all 49 remaining test directories are removed. Production migration and public repository visibility remain gated.
+Stages 1–7 are complete. The fresh GitHub installation passed dependency setup, cloud development provisioning, the six-step wizard, eight separately approved scratch-home writes, regression and MCP checks, browser checks, and uninstall/reinstall restoration. Native `/brief` called `getSettings` and `brief` through the installed MCP server and returned the expected empty brief without permission errors. Both temporary acceptance projects and scratch directories were deleted after verification. The approved real-home Claude integration passed development verification and was then restored to its prior configuration at the owner's request. All three task-created cloud projects and all 49 remaining test directories are removed. The source is public. Production migration remains gated.
 
 ### Shipped slices
 
@@ -34,17 +34,16 @@ The [single QC report](docs/qc/2026-09-09-review.md) records **16 MAJOR and 15 M
 
 The fresh-clone suite passed 228 backend assertions, 53 development-target fixtures, 34 HTTP fixtures, and the hook, OAuth, and calendar suites. The real stdio MCP suite and scratch-home installed-file check also passed. Hosted wake checks use an always-rollback transaction; the primary development run observed all 234 internal checks. The external privacy denylist passes tracked files and reachable history. Dependency installation reports no known vulnerabilities in either package tree.
 
-Live server-side AI checks remain unrun because the optional Anthropic key is absent. Native conversational acceptance and direct MCP tests both passed. No production command in the migration instructions below has been executed. GitHub reported that secret scanning and push protection were unavailable for the private repository; neither is claimed enabled.
+Live server-side AI checks remain unrun because the optional Anthropic key is absent. Native conversational acceptance and direct MCP tests both passed. No production command in the migration instructions below has been executed. GitHub made secret scanning and push protection available after the repository became public. Both are enabled and verified. Private vulnerability reporting is also enabled.
 
 ### Remaining owner gates
 
 | Gate | State and one-line ask |
 | --- | --- |
 | 4. Optional server-side AI | Live AI verification remains unrun. Provision a new isolated development project and set the optional key if this check is wanted. |
-| 6. Public source | Approve public visibility: 31 findings fixed, zero open, and privacy lint clean. |
 | 7. Existing production instance | Approve a migration window and run the steps below. Development integration acceptance passed; the owner's previous integration is restored. Approve retirement separately. |
 
-Gates 1–3, gate 5, and the Claude sign-in prerequisite are resolved. All stage completions were logged through the isolated development Helm MCP before that test project was removed. The owner approved the eight-file real-home installation after reviewing its dry-run. The installed development MCP served settings and a brief successfully. The owner subsequently requested restoration: all eight changes were reversed, newer Claude metadata was preserved, and private recovery backups were retained. No SessionEnd hook or scheduled job was added. The original MCP starts and lists its tools locally. No production API was called during restoration. The repository remains private; public visibility requires a separate approval.
+Gates 1–3, gates 5–6, and the Claude sign-in prerequisite are resolved. All stage completions were logged through the isolated development Helm MCP before that test project was removed. The owner approved the eight-file real-home installation after reviewing its dry-run. The installed development MCP served settings and a brief successfully. The owner subsequently requested restoration: all eight changes were reversed, newer Claude metadata was preserved, and private recovery backups were retained. No SessionEnd hook or scheduled job was added. The original MCP starts and lists its tools locally. No production API was called during restoration. The owner explicitly approved public visibility. Anonymous repository and README access are verified.
 
 
 ### Owner-run production migration — pending explicit approval
@@ -669,3 +668,10 @@ Management inventory found one remaining task-created project with only its expe
 Sharing checks reconfirmed 31 repaired findings with zero open, a clean tracked-file privacy scan, and a clean reachable-history privacy scan. Both current dependency audits report zero known vulnerabilities. The remote main branch matched the local reviewed code; GitHub reports the MIT licence, enabled Issues, and disabled Discussions. The fresh-clone and native integration acceptance results above remain the runtime evidence; only handover text changed in this operation. Live server-side AI remains untested. Secret scanning and push protection are not claimed enabled while the repository is private.
 
 The repository is ready for the owner's public-visibility decision. The community message and installation prompt are drafted privately; no message was sent.
+
+
+## Public release
+
+The owner explicitly approved changing the repository to public. The release operation verified the personal owner, a clean working tree, and the matching local and remote main commit before changing visibility. Anonymous requests can read the repository and its README.
+
+GitHub secret scanning, secret-scanning push protection, and private vulnerability reporting are enabled and verified. The source is ready for the drafted community message. No message was sent. No production deployment or Claude configuration changed during publication.
