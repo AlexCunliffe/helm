@@ -4,7 +4,7 @@
 
 The configurable open-source implementation is committed in the private personal [Helm repository](https://github.com/AlexCunliffe/helm). Each installer owns a separate Convex project. The development projects used for this work are acceptance fixtures, not a shared service or a dependency of other installations.
 
-Stages 1–5 are complete. Stage 6 has passed the fresh GitHub clone, dependency installation, cloud development provisioning, interactive setup, eight separately approved scratch-home installation writes, regression suite, MCP contract suite, and installed-file drift check. The browser empty brief, saved settings, and deployment-only network checks passed. Scratch uninstall restored all eight original absences; the approved integration was reinstalled for the pending brief. Native conversational `/brief` is pending Claude Code sign-in. The acceptance projects and scratch homes are retained until the complete flow passes. Real user configuration, production, and public repository visibility remain gated.
+Stages 1–7 are complete. The fresh GitHub installation passed dependency setup, cloud development provisioning, the six-step wizard, eight separately approved scratch-home writes, regression and MCP checks, browser checks, and uninstall/reinstall restoration. Native `/brief` called `getSettings` and `brief` through the installed MCP server and returned the expected empty brief without permission errors. Both temporary acceptance projects and scratch directories were deleted after verification. Real user configuration, production migration, and public repository visibility remain gated.
 
 ### Shipped slices
 
@@ -34,19 +34,18 @@ The [single QC report](docs/qc/2026-09-09-review.md) records **16 MAJOR and 15 M
 
 The fresh-clone suite passed 228 backend assertions, 53 development-target fixtures, 34 HTTP fixtures, and the hook, OAuth, and calendar suites. The real stdio MCP suite and scratch-home installed-file check also passed. Hosted wake checks use an always-rollback transaction; the primary development run observed all 234 internal checks. The external privacy denylist passes tracked files and reachable history. Dependency installation reports no known vulnerabilities in either package tree.
 
-Live server-side AI checks remain unrun because the optional Anthropic key is absent. Native conversational acceptance is distinct from the passing direct MCP tests. No production command in the migration instructions below has been executed. GitHub reported that secret scanning and push protection were unavailable for the private repository; neither is claimed enabled.
+Live server-side AI checks remain unrun because the optional Anthropic key is absent. Native conversational acceptance and direct MCP tests both passed. No production command in the migration instructions below has been executed. GitHub reported that secret scanning and push protection were unavailable for the private repository; neither is claimed enabled.
 
 ### Remaining owner gates
 
 | Gate | State and one-line ask |
 | --- | --- |
-| Claude sign-in prerequisite | Sign in with `claude auth login`, then resume the native scratch-install brief check. |
 | 4. Optional server-side AI | Set the optional Anthropic key on the development deployment through the Convex CLI if live AI verification is wanted; keep the key out of chat. |
-| 5. Real Claude integration | After Stage 6 passes, review the real-home dry-run and approve the listed files. |
-| 6. Public source | After acceptance and handover, approve public visibility with the final QC summary and privacy-lint result. |
+| 5. Real Claude integration | Approve the reviewed eight-file preview; it switches the existing Helm MCP connection from the current production instance to the new development deployment for verification. |
+| 6. Public source | Approve public visibility: 31 findings fixed, zero open, and privacy lint clean. |
 | 7. Existing production instance | After the approved real Claude configuration works on development, approve a migration window and run the steps below; approve retirement separately. |
 
-Gates 1–3 are resolved. Approval for testing does not authorize production migration or a public visibility change. No real-home installer preview or write has been performed under gate 5. Stages 1–5 and the completed handover documentation are logged through the development Helm MCP. Stage 6 will be logged only after native acceptance and cleanup succeed.
+Gates 1–3 and the Claude sign-in prerequisite are resolved. All stage completions are logged through the isolated development Helm MCP. Gate 5 has a successful real-home dry-run: eight proposed files, a backup before each write, no SessionEnd hook, and schedule templates only. No real-home installation write has been approved or performed. Approval for testing does not authorize production migration or a public visibility change.
 
 
 ### Owner-run production migration — pending explicit approval
@@ -633,3 +632,17 @@ The report now distinguishes the earlier independent installation review from St
 ## Stage 7 · Handover prepared and logged
 
 The HANDOVER section above records shipped slices, their commits, the single QC report, 31 repaired findings, the completed acceptance checks, exact owner-run migration commands, and remaining gates. Its preparation was logged through Helm MCP on the isolated development deployment. Native Stage 6 acceptance and cleanup remain pending; no completion for that stage is claimed. The repository remains private. Production and real user configuration remain untouched by this build.
+
+## Stage 6 · Completed
+
+The standard provider sign-in succeeded in the isolated test home. Native `/brief` discovered the installed Helm MCP, called `getSettings` and `brief`, and returned the expected generic empty-state response. The run exited successfully with no permission denials. The direct MCP, full regression, browser, and installation/restoration checks had already passed on this same fresh clone.
+
+Both temporary project IDs were matched to their recorded names and sole development deployments. Cleanup removed both projects through the management API. A subsequent project listing confirmed their absence. Both verified scratch directories were removed. The primary development project was retained. No production deployment was selected or changed. Stage 6 completion was logged through the primary development Helm MCP.
+
+An attempted shortcut to reuse the host login token was rejected by automatic approval review before credential access. The standard scratch-home login resolved authentication instead. Cleanup's initial approval check was resolved by supplying the original request's explicit cleanup instruction and verified test-only project identities.
+
+## Final owner review
+
+The real-home installer dry-run completed without writing files or deployment values. It proposes the Helm MCP registration, four prefixed skills, the ambient-capture rule, and two schedule templates. Each proposed write has a backup. Session logging is disabled, so no hook is proposed. The existing MCP connection currently uses the production instance; approving this preview changes that client connection to the new development deployment. The preview is retained outside the repository for owner review.
+
+The repository remains private. All 31 verified defects are repaired. Native acceptance and cleanup are complete. Real-home installation, public visibility, optional server-side AI credentials, and owner-run production migration remain explicit gates.
