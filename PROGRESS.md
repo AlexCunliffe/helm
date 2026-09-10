@@ -4,7 +4,7 @@
 
 The configurable open-source implementation is committed in the private personal [Helm repository](https://github.com/AlexCunliffe/helm). Each installer owns a separate Convex project. The development projects used for this work are acceptance fixtures, not a shared service or a dependency of other installations.
 
-Stages 1–7 are complete. The fresh GitHub installation passed dependency setup, cloud development provisioning, the six-step wizard, eight separately approved scratch-home writes, regression and MCP checks, browser checks, and uninstall/reinstall restoration. Native `/brief` called `getSettings` and `brief` through the installed MCP server and returned the expected empty brief without permission errors. Both temporary acceptance projects and scratch directories were deleted after verification. Real user configuration, production migration, and public repository visibility remain gated.
+Stages 1–7 are complete. The fresh GitHub installation passed dependency setup, cloud development provisioning, the six-step wizard, eight separately approved scratch-home writes, regression and MCP checks, browser checks, and uninstall/reinstall restoration. Native `/brief` called `getSettings` and `brief` through the installed MCP server and returned the expected empty brief without permission errors. Both temporary acceptance projects and scratch directories were deleted after verification. The approved real-home Claude integration is installed and verified on development. Production migration and public repository visibility remain gated.
 
 ### Shipped slices
 
@@ -41,11 +41,10 @@ Live server-side AI checks remain unrun because the optional Anthropic key is ab
 | Gate | State and one-line ask |
 | --- | --- |
 | 4. Optional server-side AI | Set the optional Anthropic key on the development deployment through the Convex CLI if live AI verification is wanted; keep the key out of chat. |
-| 5. Real Claude integration | Approve the reviewed eight-file preview; it switches the existing Helm MCP connection from the current production instance to the new development deployment for verification. |
 | 6. Public source | Approve public visibility: 31 findings fixed, zero open, and privacy lint clean. |
-| 7. Existing production instance | After the approved real Claude configuration works on development, approve a migration window and run the steps below; approve retirement separately. |
+| 7. Existing production instance | Approve a migration window and run the steps below; the installed Claude integration now passes development checks. Approve retirement separately. |
 
-Gates 1–3 and the Claude sign-in prerequisite are resolved. All stage completions are logged through the isolated development Helm MCP. Gate 5 has a successful real-home dry-run: eight proposed files, a backup before each write, no SessionEnd hook, and schedule templates only. No real-home installation write has been approved or performed. Approval for testing does not authorize production migration or a public visibility change.
+Gates 1–3, gate 5, and the Claude sign-in prerequisite are resolved. All stage completions are logged through the isolated development Helm MCP. The owner approved the eight-file real-home installation after reviewing its dry-run. Each file has a private backup. The installed development MCP served settings and a brief successfully. No SessionEnd hook or scheduled job was added. The repository remains private; approval for this installation does not authorize production migration or a public visibility change.
 
 
 ### Owner-run production migration — pending explicit approval
@@ -646,3 +645,11 @@ An attempted shortcut to reuse the host login token was rejected by automatic ap
 The real-home installer dry-run completed without writing files or deployment values. It proposes the Helm MCP registration, four prefixed skills, the ambient-capture rule, and two schedule templates. Each proposed write has a backup. Session logging is disabled, so no hook is proposed. The existing MCP connection currently uses the production instance; approving this preview changes that client connection to the new development deployment. The preview is retained outside the repository for owner review.
 
 The repository remains private. All 31 verified defects are repaired. Native acceptance and cleanup are complete. Real-home installation, public visibility, optional server-side AI credentials, and owner-run production migration remain explicit gates.
+
+## Gate 5 · Approved installation completed
+
+The owner approved the reviewed real-home installation and requested Glass. The installer updated all eight proposed files with backups: the Helm MCP entry, four prefixed skills, the ambient-capture rule, and two schedule templates. It left session-hook settings untouched because logging is disabled. It created no scheduled job.
+
+The installed-file check passed. Verification confirmed the seven integration file hashes, all eight private backups, the new development URL and key, and preservation of the other MCP servers. Read-only calls through the installed server returned settings and a brief successfully. Claude's unrelated live metadata changed after installation; it was preserved.
+
+Glass was opened in a visible browser tab for the owner. Its local unlock step uses the development API key. Production deployment and public repository visibility remain unchanged. No application source changed in this operation.
