@@ -4,7 +4,7 @@
 
 The configurable open-source implementation is committed in the private personal [Helm repository](https://github.com/AlexCunliffe/helm). Each installer owns a separate Convex project. The development projects used for this work are acceptance fixtures, not a shared service or a dependency of other installations.
 
-Stages 1–7 are complete. The fresh GitHub installation passed dependency setup, cloud development provisioning, the six-step wizard, eight separately approved scratch-home writes, regression and MCP checks, browser checks, and uninstall/reinstall restoration. Native `/brief` called `getSettings` and `brief` through the installed MCP server and returned the expected empty brief without permission errors. Both temporary acceptance projects and scratch directories were deleted after verification. The approved real-home Claude integration is installed and verified on development. Production migration and public repository visibility remain gated.
+Stages 1–7 are complete. The fresh GitHub installation passed dependency setup, cloud development provisioning, the six-step wizard, eight separately approved scratch-home writes, regression and MCP checks, browser checks, and uninstall/reinstall restoration. Native `/brief` called `getSettings` and `brief` through the installed MCP server and returned the expected empty brief without permission errors. Both temporary acceptance projects and scratch directories were deleted after verification. The approved real-home Claude integration passed development verification and was then restored to its prior configuration at the owner's request. All three task-created cloud projects and all 49 remaining test directories are removed. Production migration and public repository visibility remain gated.
 
 ### Shipped slices
 
@@ -40,16 +40,16 @@ Live server-side AI checks remain unrun because the optional Anthropic key is ab
 
 | Gate | State and one-line ask |
 | --- | --- |
-| 4. Optional server-side AI | Set the optional Anthropic key on the development deployment through the Convex CLI if live AI verification is wanted; keep the key out of chat. |
+| 4. Optional server-side AI | Live AI verification remains unrun. Provision a new isolated development project and set the optional key if this check is wanted. |
 | 6. Public source | Approve public visibility: 31 findings fixed, zero open, and privacy lint clean. |
-| 7. Existing production instance | Approve a migration window and run the steps below; the installed Claude integration now passes development checks. Approve retirement separately. |
+| 7. Existing production instance | Approve a migration window and run the steps below. Development integration acceptance passed; the owner's previous integration is restored. Approve retirement separately. |
 
-Gates 1–3, gate 5, and the Claude sign-in prerequisite are resolved. All stage completions are logged through the isolated development Helm MCP. The owner approved the eight-file real-home installation after reviewing its dry-run. Each file has a private backup. The installed development MCP served settings and a brief successfully. No SessionEnd hook or scheduled job was added. The repository remains private; approval for this installation does not authorize production migration or a public visibility change.
+Gates 1–3, gate 5, and the Claude sign-in prerequisite are resolved. All stage completions were logged through the isolated development Helm MCP before that test project was removed. The owner approved the eight-file real-home installation after reviewing its dry-run. The installed development MCP served settings and a brief successfully. The owner subsequently requested restoration: all eight changes were reversed, newer Claude metadata was preserved, and private recovery backups were retained. No SessionEnd hook or scheduled job was added. The original MCP starts and lists its tools locally. No production API was called during restoration. The repository remains private; public visibility requires a separate approval.
 
 
 ### Owner-run production migration — pending explicit approval
 
-These commands are instructions only. They have not been run. Use the existing production project and its data. Do not use either acceptance project. Complete the development Claude integration first. Read [the production guide](docs/deploy.md).
+These commands are instructions only. They have not been run. Use the existing production project and its data. Do not use either acceptance project. Development integration acceptance is complete. Provision a new isolated development project if further testing is needed. Read [the production guide](docs/deploy.md).
 
 Set the two clone paths. Set an unused private backup path.
 
@@ -59,8 +59,11 @@ HELM_REVIEWED_CLONE="/absolute/path/to/reviewed-clone"
 HELM_BACKUP_DIR="/absolute/path/to/private-backup"
 mkdir -m 700 "$HELM_BACKUP_DIR"
 cp "$HELM_PREVIOUS_CLONE/.env.local" "$HELM_BACKUP_DIR/previous.env.local"
-cp "$HELM_REVIEWED_CLONE/.env.local" "$HELM_BACKUP_DIR/reviewed.env.local"
-chmod 600 "$HELM_BACKUP_DIR/previous.env.local" "$HELM_BACKUP_DIR/reviewed.env.local"
+chmod 600 "$HELM_BACKUP_DIR/previous.env.local"
+if [ -f "$HELM_REVIEWED_CLONE/.env.local" ]; then
+  cp "$HELM_REVIEWED_CLONE/.env.local" "$HELM_BACKUP_DIR/reviewed.env.local"
+  chmod 600 "$HELM_BACKUP_DIR/reviewed.env.local"
+fi
 ```
 
 Open the previous clone's `.env.local`. Confirm that it selects the existing production project. Export its data and stored files.
@@ -653,3 +656,16 @@ The owner approved the reviewed real-home installation and requested Glass. The 
 The installed-file check passed. Verification confirmed the seven integration file hashes, all eight private backups, the new development URL and key, and preservation of the other MCP servers. Read-only calls through the installed server returned settings and a brief successfully. Claude's unrelated live metadata changed after installation; it was preserved.
 
 Glass was opened in a visible browser tab for the owner. Its local unlock step uses the development API key. Production deployment and public repository visibility remain unchanged. No application source changed in this operation.
+
+
+## Sharing preparation — restoration and cleanup
+
+The owner requested restoration of the previous Claude integration, removal of the test environments, a sharing-readiness check, and a draft community message. Public visibility and production migration were not requested.
+
+Restoration verified all eight original backups. It restored only the original Helm entry in the current Claude JSON, preserving newer metadata and every other MCP entry. The standard uninstaller restored the remaining seven files. Verification matched their original hashes, found an empty installation manifest, and confirmed hook settings were unchanged. The original MCP started and listed its tools locally. No production API was called. Private recovery backups remain available.
+
+Management inventory found one remaining task-created project with only its expected development deployment. That project was deleted. The team inventory confirmed that all three task-created projects were absent. The obsolete local environment selector and 49 remaining scratch directories were removed. Source repositories and review evidence remain available. Further backend work requires a newly configured isolated development deployment.
+
+Sharing checks reconfirmed 31 repaired findings with zero open, a clean tracked-file privacy scan, and a clean reachable-history privacy scan. Both current dependency audits report zero known vulnerabilities. The remote main branch matched the local reviewed code; GitHub reports the MIT licence, enabled Issues, and disabled Discussions. The fresh-clone and native integration acceptance results above remain the runtime evidence; only handover text changed in this operation. Live server-side AI remains untested. Secret scanning and push protection are not claimed enabled while the repository is private.
+
+The repository is ready for the owner's public-visibility decision. The community message and installation prompt are drafted privately; no message was sent.
