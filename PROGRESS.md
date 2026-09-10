@@ -4,7 +4,7 @@
 
 The configurable open-source implementation is committed in the public [Helm repository](https://github.com/AlexCunliffe/helm). Each installer owns a separate Convex project. The development projects used for this work are acceptance fixtures, not a shared service or a dependency of other installations.
 
-Stages 1–7 are complete. The fresh GitHub installation passed dependency setup, cloud development provisioning, the six-step wizard, eight separately approved scratch-home writes, regression and MCP checks, browser checks, and uninstall/reinstall restoration. Native `/brief` called `getSettings` and `brief` through the installed MCP server and returned the expected empty brief without permission errors. Both temporary acceptance projects and scratch directories were deleted after verification. The approved real-home Claude integration passed development verification and was then restored to its prior configuration at the owner's request. All three task-created cloud projects and all 49 remaining test directories are removed. The source is public. Production migration remains gated.
+Stages 1–7 are complete. The fresh GitHub installation passed dependency setup, cloud development provisioning, the six-step wizard, eight separately approved scratch-home writes, regression and MCP checks, browser checks, and uninstall/reinstall restoration. Native `/brief` called `getSettings` and `brief` through the installed MCP server and returned the expected empty brief without permission errors. Both temporary acceptance projects and scratch directories were deleted after verification. The approved real-home Claude integration passed development verification and was then restored to its prior configuration at the owner's request. All three task-created cloud projects and all 49 remaining test directories are removed. The source is public. The owner subsequently authorized full production migration and retirement. Production deployment, client cutover, and retirement are complete. Live production checks passed; a manual Glass visual check remains outstanding.
 
 ### Shipped slices
 
@@ -34,73 +34,29 @@ The [single QC report](docs/qc/2026-09-09-review.md) records **16 MAJOR and 15 M
 
 The fresh-clone suite passed 228 backend assertions, 53 development-target fixtures, 34 HTTP fixtures, and the hook, OAuth, and calendar suites. The real stdio MCP suite and scratch-home installed-file check also passed. Hosted wake checks use an always-rollback transaction; the primary development run observed all 234 internal checks. The external privacy denylist passes tracked files and reachable history. Dependency installation reports no known vulnerabilities in either package tree.
 
-Live server-side AI checks remain unrun because the optional Anthropic key is absent. Native conversational acceptance and direct MCP tests both passed. No production command in the migration instructions below has been executed. GitHub made secret scanning and push protection available after the repository became public. Both are enabled and verified. Private vulnerability reporting is also enabled.
+Development AI checks covered the missing-key path. During the authorized production migration, one live structured enrichment call passed using the existing production integration. Native conversational acceptance passed in development; direct installed MCP checks passed in production. Production migration evidence is recorded below. GitHub made secret scanning and push protection available after the repository became public. Both are enabled and verified. Private vulnerability reporting is also enabled.
 
-### Remaining owner gates
+### Final owner gates
 
 | Gate | State and one-line ask |
 | --- | --- |
-| 4. Optional server-side AI | Live AI verification remains unrun. Provision a new isolated development project and set the optional key if this check is wanted. |
-| 7. Existing production instance | Approve a migration window and run the steps below. Development integration acceptance passed; the owner's previous integration is restored. Approve retirement separately. |
+| 4. Optional server-side AI | Resolved: one live production structured-enrichment check passed during the authorized migration. |
+| 7. Existing production instance | The owner approved full migration and retirement. Deployment, credential rotation, client cutover, calendar sync, MCP reads, a reversible task edit, and data-integrity verification passed. The previous repository is archived. Restart existing client sessions and confirm the Glass display. |
 
 Gates 1–3, gates 5–6, and the Claude sign-in prerequisite are resolved. All stage completions were logged through the isolated development Helm MCP before that test project was removed. The owner approved the eight-file real-home installation after reviewing its dry-run. The installed development MCP served settings and a brief successfully. The owner subsequently requested restoration: all eight changes were reversed, newer Claude metadata was preserved, and private recovery backups were retained. No SessionEnd hook or scheduled job was added. The original MCP starts and lists its tools locally. No production API was called during restoration. The owner explicitly approved public visibility. Anonymous repository and README access are verified.
 
 
-### Owner-run production migration — pending explicit approval
+### Authorized production migration — 10 September 2026
 
-These commands are instructions only. They have not been run. Use the existing production project and its data. Do not use either acceptance project. Development integration acceptance is complete. Provision a new isolated development project if further testing is needed. Read [the production guide](docs/deploy.md).
+The reviewed release was deployed to the existing production project after a verified export, environment backup, source bundle, compatibility checks against an in-memory snapshot, and a successful deployment dry run. The schema update was additive and removed no indexes. Personal configuration was preserved in the new settings document.
 
-Set the two clone paths. Set an unused private backup path.
+The production API and surface credentials were rotated independently. The installed MCP, existing session hook, skills, and scheduled procedure files now use the reviewed checkout. Unrelated client configuration was preserved. Production setup and regression helpers were not run.
 
-```sh
-HELM_PREVIOUS_CLONE="/absolute/path/to/previous-clone"
-HELM_REVIEWED_CLONE="/absolute/path/to/reviewed-clone"
-HELM_BACKUP_DIR="/absolute/path/to/private-backup"
-mkdir -m 700 "$HELM_BACKUP_DIR"
-cp "$HELM_PREVIOUS_CLONE/.env.local" "$HELM_BACKUP_DIR/previous.env.local"
-chmod 600 "$HELM_BACKUP_DIR/previous.env.local"
-if [ -f "$HELM_REVIEWED_CLONE/.env.local" ]; then
-  cp "$HELM_REVIEWED_CLONE/.env.local" "$HELM_BACKUP_DIR/reviewed.env.local"
-  chmod 600 "$HELM_BACKUP_DIR/reviewed.env.local"
-fi
-```
+Observed production checks passed: installed stdio MCP settings, areas, brief, day log, inbox and waiting reads; rejection of old and absent API credentials; HTTP brief and surface-token authentication; live structured AI enrichment; Google Calendar refresh; and a reversible edit on the migration's own maintenance record. A post-migration export confirmed every original task, area, check-in and existing metadata record was preserved. The calendar mirror was reduced to unique events in the current rolling window.
 
-Open the previous clone's `.env.local`. Confirm that it selects the existing production project. Export its data and stored files.
+Private backups include original and post-cutover exports, environment values, client preimages, a source bundle, verification evidence and recovery instructions. None of that private material is committed to this public repository. The previous source is marked retired and archived. Its local checkout and worktrees are retained for rollback. Production Glass visual confirmation remains pending because browser automation could not verify the administrator policy. An optional conversational production check also remains unrun; direct installed MCP verification passed.
 
-```sh
-cd "$HELM_PREVIOUS_CLONE"
-npx convex export --prod --include-file-storage --path "$HELM_BACKUP_DIR/production.zip"
-```
-
-Keep the backup private. Copy the verified project selection into the reviewed clone. Build the page. Deploy the reviewed code.
-
-```sh
-cp "$HELM_PREVIOUS_CLONE/.env.local" "$HELM_REVIEWED_CLONE/.env.local"
-chmod 600 "$HELM_REVIEWED_CLONE/.env.local"
-cd "$HELM_REVIEWED_CLONE"
-npm run glass:embed
-npx convex deploy
-```
-
-Read the target shown by the CLI before confirming it. Stop if the project is wrong. Do not run setup or regression tests against this installation.
-
-Rotate the production API key. Rotate the production surface token. Remove the anonymous-access opt-out.
-
-```sh
-node -e 'process.stdout.write(require("node:crypto").randomBytes(24).toString("hex"))' | npx convex env set --prod HELM_API_KEY
-node -e 'process.stdout.write(require("node:crypto").randomBytes(24).toString("hex"))' | npx convex env set --prod HELM_SURFACE_TOKEN
-npx convex env remove --prod HELM_ALLOW_ANON
-```
-
-Read the new API key in a private terminal.
-
-```sh
-npx convex env get --prod HELM_API_KEY
-```
-
-Open the production glass. Unlock it with the new key. Configure settings. Preserve existing areas and tasks. Back up the Claude config paths shown by the approved installer. Replace only the Helm MCP URL and key with the production values. Point its command at the reviewed clone. Update the optional Helm hook if installed. Update HTTP clients with the production site URL and new surface token. Follow [client configuration](docs/deploy.md#point-clients-at-production).
-
-Restart Claude Code. Verify a production brief. Verify a reversible task edit. Keep the previous clone and backups until those checks pass. Approve retirement of the previous repository separately. Do not rerun the development installer over the manually configured production entry.
+The reusable deployment and client instructions remain in [the production guide](docs/deploy.md). They require the installation owner's approval and verified target selection. Restart already-open Claude Code sessions after credential changes.
 
 ---
 
