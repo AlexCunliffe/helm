@@ -3,6 +3,8 @@ import assert from "node:assert/strict";
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, delimiter } from "node:path";
+import { ConvexHttpClient } from "convex/browser";
+import { makeFunctionReference } from "convex/server";
 import { development } from "./lib/dev.mjs";
 
 const root = mkdtempSync(join(tmpdir(), "helm-dev-target-"));
@@ -26,6 +28,20 @@ try {
     const result = JSON.parse(dev.cli(["function-spec"]));
     assert.deepEqual(result.args, ["--no-install", "convex", "function-spec", "--env-file", envFile]);
     assert.deepEqual(result.aliases, []); count++;
+  }
+  for (const host of ["offline-development.convex.cloud", "offline-development.eu-west-1.convex.cloud"]) {
+    for (const slash of ["", "/"]) {
+      writeFileSync(envFile, `CONVEX_DEPLOYMENT=dev:offline-development\nCONVEX_URL=https://${host}${slash}\n`);
+      const dev = development(root), requests = [];
+      const client = new ConvexHttpClient(dev.url, { logger: false, fetch: async url => {
+        requests.push(String(url)); return new Response(JSON.stringify({ status: "success", value: {}, logLines: [] }));
+      } });
+      await client.query(makeFunctionReference("settings:get"), {});
+      assert.equal(requests[0], `https://${host}/api/query`);
+      assert.equal(new URL(dev.url.replace(".convex.cloud", ".convex.site") + "/brief").pathname, "/brief");
+      writeFileSync(envFile, `CONVEX_DEPLOYMENT=dev:offline-development\nCONVEX_URL=https://${host}/\n`);
+      dev.assertTarget(); count++;
+    }
   }
   for (const name of aliases.slice(1)) {
     reject(valid + name + "=\n");

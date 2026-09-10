@@ -21,7 +21,7 @@ function readTarget(envFile) {
       !parsed.hostname.endsWith(".convex.cloud") || parsed.username || parsed.password ||
       parsed.port || parsed.search || parsed.hash || parsed.pathname !== "/")
     throw new Error("CONVEX_URL must match the dev deployment in .env.local.");
-  return { name, url: config.CONVEX_URL };
+  return { name, url: parsed.origin };
 }
 
 /** Local tools deliberately target cloud development using account authentication. */

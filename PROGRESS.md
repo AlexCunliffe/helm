@@ -449,3 +449,11 @@ QC repair 13 complete: D2 now runs only the always-rollback wake probe. It does 
 Independent verification passed 40 mutation/scheduler cases and three transaction-model cases covering initially absent state, existing check-ins/jobs, and injected failure after queued work. Success reached 230 internal checks. TypeScript, development push, 228 top-level backend assertions, HTTP/target fixtures, and hook/OAuth/calendar suites passed. The reduced top-level count reflects replacement of the live test by rollback assertions.
 
 The fresh installation pass found zero MAJOR issues and one MINOR URL-normalization edge (INST-03). Cumulative confirmed defects are now 15 MAJOR and 13 MINOR. Two MINOR scopes remain: INST-03 and CONTRACT-04.
+
+## QC repair 14 plan: normalize accepted development URLs
+
+Finding: INST-03. Return the validated URL origin so an optional trailing slash cannot create double-slash API or surface paths. Treat equivalent URL spellings as the same target.
+
+Validation: actual Convex client requests for standard and regional hosts with and without trailing slashes; same-target revalidation; full development and MCP suites.
+
+QC repair 14 complete: accepted development URLs use their canonical origin. Standard and regional hostnames work with or without a trailing slash, and equivalent spellings do not change the validated target. Independent actual client/router checks and all 53 target fixtures passed. The full 228-assertion backend suite, HTTP/hook/OAuth/calendar checks, and real MCP tests passed.
