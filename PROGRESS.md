@@ -471,3 +471,15 @@ QC repair 15 complete: both reconcile procedures read the saved evening carried 
 Independent verification passed two-skill parity and four actual stdio/MCP-to-handler scenarios covering cap overflow, unrelated backlog, missing check-ins, and missing tasks. Tool metadata and all current source instructions agree. Both skill validators passed. The final wording passed 228 backend assertions, 53 target fixtures, 34 HTTP fixtures, hook/OAuth/calendar checks, and real development MCP tests.
 
 All 15 MAJOR and 13 MINOR confirmed defects now have independently verified repairs. Fresh repeat passes have zero MAJOR findings in every affected dimension. Final full-diff procedure coverage follows before Stage 5 is logged complete.
+
+## QC repair 16 plan: preserve completion undo order
+
+Finding: CODE-002, MINOR. Completion currently removes a chosen task, so the existing undo restores status without its chosen rank. Preserve chosen membership on completion; the read API already excludes closed tasks. Keep actual open-status demotions removed. Clarify the wake-batch comment to match the documented priority among retained wake IDs.
+
+The separate batch-order candidate was rejected by independent verification at confidence 50: existing documentation explicitly preserves order among retained wake IDs, with the wake head ahead of other choices. No behavioral change is required for that candidate.
+
+Validation: actual baseline/current undo reproduction, completion/undo and demotion assertions inside the always-rollback wake probe, TypeScript, development push, full development suite, independent verification, and a fresh high history review.
+
+QC repair 16 complete: completing a chosen task preserves its position while the read API excludes it from active work. Undo restores that position. Explicit next, inbox, waiting, someday, and dropped transitions still remove the choice. The wake-batch comment now states its existing retained-ID priority rule.
+
+Independent verification passed nine actual-handler undo/demotion scenarios and three absent/present/failure preservation probes. Hosted validation passed TypeScript, development push, 234 internal rollback checks, 228 top-level backend assertions, 53 target fixtures, 34 HTTP fixtures, and hook/OAuth/calendar suites. Cumulative confirmed defects are 15 MAJOR and 14 MINOR, all with verified repairs.

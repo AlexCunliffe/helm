@@ -271,6 +271,13 @@ export const wakeBatchProbe = internalMutation({
     check(!(await morning())!.chosen.includes(currentHead), "deferral removes explicit choice");
     await applyStatus({ ...ctx }, currentHead, "today", 2);
     await prependNow({ ...ctx }, date, [currentHead]);
+    const beforeDone = (await morning())!.chosen;
+    await applyStatus({ ...ctx }, currentHead, "done", 2);
+    check((await morning())!.chosen.join() === beforeDone.join(), "completion preserves chosen rank for undo");
+    check(!(await picks()).some(t => t._id === currentHead), "completed choice stays out of Now");
+    await applyStatus({ ...ctx }, currentHead, "today", 2);
+    check((await picks())[0]._id === currentHead, "undo restores the chosen head beyond the display cap");
+    check((await ctx.db.get(currentHead))!.doneAt === undefined, "undo clears completion time");
     // Escaped text must use Convex storage size, not its much larger JSON encoding.
     // The legacy check-in stays byte-for-byte intact while both large batches progress.
     const largeMorning = (await morning())!;

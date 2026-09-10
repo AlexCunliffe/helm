@@ -79,7 +79,8 @@ export async function applyStatus(
     patch.needsReview = false;
   }
   await ctx.db.patch(id, patch);
-  if (status !== "today") {
+  // Keep completed choices so undo restores their rank. Readers exclude closed tasks.
+  if (status !== "today" && status !== "done") {
     const settings = await readSettings(ctx);
     await removeFromNow(ctx, dateString(now, settings.timezone), id);
   }
@@ -379,7 +380,8 @@ export async function wakeDueBatch(ctx: MutationCtx, now: number, generation?: n
   const morning = accountRead(ctx, await ctx.db.query("checkins")
     .withIndex("by_date_kind", q => q.eq("date", date).eq("kind", "morning")).unique());
   const previous = new Set(state?.head ?? []);
-  // Respect current order, including deliberate removals/reordering between batches.
+  // Preserve current order/removals among retained wake IDs. The wake head
+  // takes precedence over other choices until the active batch chain finishes.
   const retained = (morning?.chosen ?? []).filter(id => previous.has(id));
   const head = [...new Set([...retained, ...promoted])].slice(0, NOW_ORDER_LIMIT);
   if (promoted.length) await prependNow(ctx, date, head);
