@@ -495,3 +495,11 @@ Fresh final-delta review found no qualifying issue. Security review found no new
 Create a scratch home and clone from GitHub. Follow `docs/install.md` as the installation guide. Use a second throwaway cloud development project. Keep all global installation files in the scratch home. Record failures or unclear steps as findings, repair them in the main repository, push, and restart the clone. Delete the throwaway project and scratch directories after the whole flow passes.
 
 Claude Code sign-in is a pending prerequisite for the native conversational brief. Core setup, regression, MCP, installer, and glass checks can proceed independently. Optional provider credentials remain absent; no live paid AI or Google account test is claimed.
+
+## Stage 6 finding and QC repair 17 plan
+
+Finding: INST-04, MAJOR under the clean-install rule. A fresh scratch-home run of the documented Convex command asks whether to install optional Convex AI guidance files. The guide did not specify an answer. The test declined the optional files, then stopped before Helm configuration. No global user files or production deployment were changed.
+
+Add the explicit answer to the guide. Verify it against the pinned CLI and observed prompt. Run the full development suite. Push the repair and restart with a new GitHub clone and scratch home. Retain the failed attempt's isolated project record for final cleanup.
+
+QC repair 17 complete: the install guide explicitly declines optional Convex AI files. Independent verification matched the exact prompt, default, and decline branch in the pinned CLI. The full development suite passed 228 backend assertions, 53 target fixtures, 34 HTTP fixtures, and hook/OAuth/calendar checks. Cumulative defects are 16 MAJOR and 14 MINOR, all repaired. The clean-install restart will verify the corrected instruction from GitHub.

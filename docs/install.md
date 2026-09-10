@@ -54,6 +54,8 @@ npx convex dev --once
 
 Sign in when the CLI asks. Select your own team. Select a new project. Name it `helm-oss`, or use another unused name. Select a cloud development deployment. Do not select an existing production project for this installation test.
 
+At `Set up Convex AI files?`, enter `n`. Helm already includes its own build guidance.
+
 Wait for the functions-ready message. The command generates bindings and writes `.env.local`. The deployment value must begin with `dev:`. The client URL must use the matching deployment's `convex.cloud` host. The site URL uses the corresponding `convex.site` host. Regional hostnames are valid. Keep the generated values; do not replace them with the placeholders in `.env.local.example`.
 
 If the CLI selected a local deployment, repeat its configuration and choose cloud development:
