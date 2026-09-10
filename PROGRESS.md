@@ -457,3 +457,17 @@ Finding: INST-03. Return the validated URL origin so an optional trailing slash 
 Validation: actual Convex client requests for standard and regional hosts with and without trailing slashes; same-target revalidation; full development and MCP suites.
 
 QC repair 14 complete: accepted development URLs use their canonical origin. Standard and regional hostnames work with or without a trailing slash, and equivalent spellings do not change the validated target. Independent actual client/router checks and all 53 target fixtures passed. The full 228-assertion backend suite, HTTP/hook/OAuth/calendar checks, and real MCP tests passed.
+
+## QC repair 15 plan: read the saved carried set
+
+Finding: CONTRACT-04. After reconciliation, read the current evening check-in and hydrate its carried task IDs. Use that saved set for the carried summary. Keep interactive and scheduled procedures aligned.
+
+Validation: independent procedure execution against actual handler fixtures with more carried tasks than the daily cap and with unrelated backlog filling the brief; skill frontmatter validation, actual MCP calls, and the full development suite.
+
+Group 15 scope update: verification found the same DOC-003 watermark ambiguity in MCP tool descriptions. Align those descriptions, the metadata module comment, and the build guidance with incremental update boundaries and complete calendar windows. These are instruction/comment changes only. Re-run the full suite after the final wording.
+
+QC repair 15 complete: both reconcile procedures read the saved evening carried set and hydrate those IDs. Missing records are reported as unavailable. MCP watermark descriptions and related source guidance now distinguish incremental update boundaries from diagnostic calendar run starts.
+
+Independent verification passed two-skill parity and four actual stdio/MCP-to-handler scenarios covering cap overflow, unrelated backlog, missing check-ins, and missing tasks. Tool metadata and all current source instructions agree. Both skill validators passed. The final wording passed 228 backend assertions, 53 target fixtures, 34 HTTP fixtures, hook/OAuth/calendar checks, and real development MCP tests.
+
+All 15 MAJOR and 13 MINOR confirmed defects now have independently verified repairs. Fresh repeat passes have zero MAJOR findings in every affected dimension. Final full-diff procedure coverage follows before Stage 5 is logged complete.

@@ -15,8 +15,9 @@ description: Close a day in Helm and reconcile planned and unplanned work. Use f
 5. Inspect provisional completions from `claude-hook`. Keep real work. Use `update` to clarify a title. Use `setStatus` with `{ id, status: "dropped" }` for a duplicate or noise. Do not use `merge` for completed tasks; it accepts only open tasks.
 6. Call `reconcileOutstanding` with no arguments. This closes today, backfills missed days in the bounded window, and confirms surviving provisional completions.
 7. Call `dayLog` again. Call `brief` for the current streak.
-8. Show planned completions, unplanned completions, and carried tasks. Omit empty groups. Mention backfilled days if any. Use the configured tone.
-9. Offer a journal line only in an interactive run. Write it to a knowledge store only after the user authorizes that write and supplies or confirms the destination. Otherwise show the line for the user to copy.
+8. Call `getCheckin` with `{ date: currentDate, kind: "evening" }`. Use the current date in `timezone`. Read its `carried` IDs. Call `get` with `{ id }` for each carried ID. Report a missing check-in or task as unavailable.
+9. Show planned completions, unplanned completions, and the saved carried tasks. Use the check-in for carried membership; the brief contains a capped shortlist and can include other backlog. Omit empty groups. Mention backfilled days if any. Use the configured tone.
+10. Offer a journal line only in an interactive run. Write it to a knowledge store only after the user authorizes that write and supplies or confirms the destination. Otherwise show the line for the user to copy.
 
 Use `workday.eveningWatchFrom` or `workday.end` with `timezone` when the user chooses a schedule. A scheduled run uses the same procedure and leaves optional journal writing for the user. Send no external notification without authorization.
 

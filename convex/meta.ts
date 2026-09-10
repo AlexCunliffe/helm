@@ -1,7 +1,8 @@
 /**
  * Meta — singletons: watermarks & config (docs/03). The intraday sweep keeps a
- * per-source watermark here (`sweep:<source>:lastAt`) so each run only processes
- * items newer than last time and then advances it — bounded work, low cost
+ * per-source watermark here (`sweep:<source>:lastAt`). Incremental sources read
+ * updates after it. Calendar prep reads complete rolling windows and records
+ * the successful run start only for diagnostics — bounded work, low cost
  * (docs/05). `value` is `v.any()`; callers own the shape per key.
  */
 import { mutation, query } from "./_generated/server";

@@ -23,7 +23,7 @@ Keep the loop moving. Don't stall on small choices — pick a sensible default, 
 - **Additive, scalable patterns only.** New category = a row in the `areas` table, never a migration. New capture source = a new adapter. New surface = a new client of the read API. See `docs/09-scalability.md`. Never hardcode a closed list where the spec says it must extend.
 - **Secrets are pointers.** Never commit keys/tokens/PII. Use `.env.local` (gitignored); Convex secrets via `npx convex env set`.
 - **Respect the second-brain split (`docs/08`).** Operational task state → Convex (auto-writes fine). Durable *knowledge* → the markdown vault, and only ever **proposed for confirmation**, never silently auto-written.
-- **Cost-aware.** Anything that calls an LLM on a schedule (sweeps, agents) must be watermark-bounded and respect a spend cap. Note token implications in `PROGRESS.md`.
+- **Cost-aware.** Anything that calls an LLM on a schedule (sweeps, agents) must use bounded source windows and item limits and respect a spend cap. Use update watermarks for incremental sources and complete rolling windows for calendar prep. Note token implications in `PROGRESS.md`.
 
 ## Human-in-the-loop gates (surface, don't block the rest)
 

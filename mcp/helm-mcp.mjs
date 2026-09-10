@@ -285,14 +285,14 @@ forward(
 // ── sweep watermarks (Phase 2) ───────────────────────────────────────────────
 forward(
   "getWatermark",
-  "Get the intraday-sweep watermark (epoch ms, 0 if never) for a source — pull only items newer than this.",
+  "Get a source watermark (epoch ms, 0 if never). Incremental sources read updates after it. Calendar prep always reads its complete current/next-date event window; its watermark is diagnostic and must not filter events.",
   { source: z.string() },
   "query",
   "meta:getWatermark",
 );
 forward(
   "advanceWatermark",
-  "Advance a sweep source's watermark to the newest item processed (monotonic — only moves forward).",
+  "Advance a source watermark monotonically after successful processing. For incremental sources, use a fully processed update-time boundary. After a complete calendar window, use run start for diagnostics. Preserve the watermark after incomplete reads or failures.",
   { source: z.string(), at: z.number() },
   "mutation",
   "meta:advanceWatermark",
