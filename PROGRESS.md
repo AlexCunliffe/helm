@@ -1,5 +1,109 @@
 # Progress
 
+## HANDOVER
+
+The configurable open-source implementation is committed in the private personal [Helm repository](https://github.com/AlexCunliffe/helm). Each installer owns a separate Convex project. The development projects used for this work are acceptance fixtures, not a shared service or a dependency of other installations.
+
+Stages 1–5 are complete. Stage 6 has passed the fresh GitHub clone, dependency installation, cloud development provisioning, interactive setup, eight separately approved scratch-home installation writes, regression suite, MCP contract suite, and installed-file drift check. The browser empty brief, saved settings, and deployment-only network checks passed. Scratch uninstall restored all eight original absences; the approved integration was reinstalled for the pending brief. Native conversational `/brief` is pending Claude Code sign-in. The acceptance projects and scratch homes are retained until the complete flow passes. Real user configuration, production, and public repository visibility remain gated.
+
+### Shipped slices
+
+| Slice | Commit | Result |
+| --- | --- | --- |
+| Clean import | `da79997` | Generic source, fresh history, MIT licence, public-safe project metadata. |
+| Development baseline | `2a08c2a` | Separate development deployment and regression baseline. |
+| 1. Settings document | `d14ecfb` | Validated defaults, partial updates, and removable overrides. |
+| 2. Settings consumers | `a001939` | Configured timezone, workday, caps, owner context, and live display. |
+| 3. MCP and skills | `2aee19f` | Settings tools and four procedures driven by enabled sources. |
+| 4. Area seeding | `b168d8f` | Generic and classic palettes; existing IDs and labels preserved. |
+| 5. Settings panel | `9617cff` | Live settings and area editing; terminal instructions for key rotation. |
+| 6. Closed authentication | `8f023bf` | Unconfigured public functions reject access. |
+| 7. Credential rotation | `7f7e7d6` | Independent credentials set through stdin without printed values. |
+| 8. Browser client | `28273c6` | Bundled client and restricted network destinations. |
+| 9. Session hook | `24fec46` | Logging off by default; bounded, silent input handling. |
+| 10. Setup wizard | `6704031` | Six approved sections, validation, preview, and repeatable configuration. |
+| 11. Claude integration | `fa12ef3` | Per-file approvals, backups, drift checks, and reversible installation. |
+| 12. Security guide | `f39a2d8` | Credential roles, trust boundaries, and owner responsibilities. |
+| Surface and dependency hardening | `6dfd45e`, `2d1e362` | Bounded proposal-only ingest and repaired dependency vulnerabilities. |
+| Documentation | `e061f15`, `50fb6aa`, `e5b389c` | Installation, configuration, sources, deployment, and corrected fresh-CLI prompt. |
+| Reviewed repairs | `a68dc85`–`f7e6fa1` | Fixture preservation, OAuth binding, bounded reads/writes, calendar snapshots, task ordering, and contract fixes. |
+
+### Quality and acceptance evidence
+
+The [single QC report](docs/qc/2026-09-09-review.md) records **16 MAJOR and 15 MINOR defects: 31 fixed, zero open**. Seven independent dimensions, the reused verifier, fresh repeats for affected MAJOR dimensions, the full-diff high code-review procedure, and the full-diff security-review procedure are complete. The final reviewed runtime is `f7e6fa1`; the clean-install documentation correction is `e5b389c`.
+
+The fresh-clone suite passed 228 backend assertions, 53 development-target fixtures, 34 HTTP fixtures, and the hook, OAuth, and calendar suites. The real stdio MCP suite and scratch-home installed-file check also passed. Hosted wake checks use an always-rollback transaction; the primary development run observed all 234 internal checks. The external privacy denylist passes tracked files and reachable history. Dependency installation reports no known vulnerabilities in either package tree.
+
+Live server-side AI checks remain unrun because the optional Anthropic key is absent. Native conversational acceptance is distinct from the passing direct MCP tests. No production command in the migration instructions below has been executed. GitHub reported that secret scanning and push protection were unavailable for the private repository; neither is claimed enabled.
+
+### Remaining owner gates
+
+| Gate | State and one-line ask |
+| --- | --- |
+| Claude sign-in prerequisite | Sign in with `claude auth login`, then resume the native scratch-install brief check. |
+| 4. Optional server-side AI | Set the optional Anthropic key on the development deployment through the Convex CLI if live AI verification is wanted; keep the key out of chat. |
+| 5. Real Claude integration | After Stage 6 passes, review the real-home dry-run and approve the listed files. |
+| 6. Public source | After acceptance and handover, approve public visibility with the final QC summary and privacy-lint result. |
+| 7. Existing production instance | After the approved real Claude configuration works on development, approve a migration window and run the steps below; approve retirement separately. |
+
+Gates 1–3 are resolved. Approval for testing does not authorize production migration or a public visibility change. No real-home installer preview or write has been performed under gate 5. Stages 1–5 and the completed handover documentation are logged through the development Helm MCP. Stage 6 will be logged only after native acceptance and cleanup succeed.
+
+
+### Owner-run production migration — pending explicit approval
+
+These commands are instructions only. They have not been run. Use the existing production project and its data. Do not use either acceptance project. Complete the development Claude integration first. Read [the production guide](docs/deploy.md).
+
+Set the two clone paths. Set an unused private backup path.
+
+```sh
+HELM_PREVIOUS_CLONE="/absolute/path/to/previous-clone"
+HELM_REVIEWED_CLONE="/absolute/path/to/reviewed-clone"
+HELM_BACKUP_DIR="/absolute/path/to/private-backup"
+mkdir -m 700 "$HELM_BACKUP_DIR"
+cp "$HELM_PREVIOUS_CLONE/.env.local" "$HELM_BACKUP_DIR/previous.env.local"
+cp "$HELM_REVIEWED_CLONE/.env.local" "$HELM_BACKUP_DIR/reviewed.env.local"
+chmod 600 "$HELM_BACKUP_DIR/previous.env.local" "$HELM_BACKUP_DIR/reviewed.env.local"
+```
+
+Open the previous clone's `.env.local`. Confirm that it selects the existing production project. Export its data and stored files.
+
+```sh
+cd "$HELM_PREVIOUS_CLONE"
+npx convex export --prod --include-file-storage --path "$HELM_BACKUP_DIR/production.zip"
+```
+
+Keep the backup private. Copy the verified project selection into the reviewed clone. Build the page. Deploy the reviewed code.
+
+```sh
+cp "$HELM_PREVIOUS_CLONE/.env.local" "$HELM_REVIEWED_CLONE/.env.local"
+chmod 600 "$HELM_REVIEWED_CLONE/.env.local"
+cd "$HELM_REVIEWED_CLONE"
+npm run glass:embed
+npx convex deploy
+```
+
+Read the target shown by the CLI before confirming it. Stop if the project is wrong. Do not run setup or regression tests against this installation.
+
+Rotate the production API key. Rotate the production surface token. Remove the anonymous-access opt-out.
+
+```sh
+node -e 'process.stdout.write(require("node:crypto").randomBytes(24).toString("hex"))' | npx convex env set --prod HELM_API_KEY
+node -e 'process.stdout.write(require("node:crypto").randomBytes(24).toString("hex"))' | npx convex env set --prod HELM_SURFACE_TOKEN
+npx convex env remove --prod HELM_ALLOW_ANON
+```
+
+Read the new API key in a private terminal.
+
+```sh
+npx convex env get --prod HELM_API_KEY
+```
+
+Open the production glass. Unlock it with the new key. Configure settings. Preserve existing areas and tasks. Back up the Claude config paths shown by the approved installer. Replace only the Helm MCP URL and key with the production values. Point its command at the reviewed clone. Update the optional Helm hook if installed. Update HTTP clients with the production site URL and new surface token. Follow [client configuration](docs/deploy.md#point-clients-at-production).
+
+Restart Claude Code. Verify a production brief. Verify a reversible task edit. Keep the previous clone and backups until those checks pass. Approve retirement of the previous repository separately. Do not rerun the development installer over the manually configured production entry.
+
+---
+
 ## Stage 1 · Clean import
 
 Goal: create a standalone import with generic examples and a fresh history.
@@ -503,3 +607,29 @@ Finding: INST-04, MAJOR under the clean-install rule. A fresh scratch-home run o
 Add the explicit answer to the guide. Verify it against the pinned CLI and observed prompt. Run the full development suite. Push the repair and restart with a new GitHub clone and scratch home. Retain the failed attempt's isolated project record for final cleanup.
 
 QC repair 17 complete: the install guide explicitly declines optional Convex AI files. Independent verification matched the exact prompt, default, and decline branch in the pinned CLI. The full development suite passed 228 backend assertions, 53 target fixtures, 34 HTTP fixtures, and hook/OAuth/calendar checks. Cumulative defects are 16 MAJOR and 14 MINOR, all repaired. The clean-install restart will verify the corrected instruction from GitHub.
+
+## QC repair 18 and handover plan
+
+Finding: DOC-004, MINOR. The QC summary calls an earlier independent installation review a fresh installation pass, which can be mistaken for completed Stage 6 acceptance. Name the earlier review accurately. State that native acceptance is pending. Keep all finding rows in one table.
+
+Prepare the top-level handover with slice commits, verified finding counts, acceptance evidence, owner gates, and unexecuted production migration instructions. Validate the handover independently. Run the full development suite after the documentation repair. Run privacy lint and link checks before committing.
+
+## Stage 6 · Restarted acceptance checkpoint
+
+A fresh GitHub clone at `e5b389c` passed dependency installation, cloud development provisioning, the corrected optional-guidance prompt, all six interactive wizard approvals, and all eight separately approved installer writes in a scratch home. The full suite passed 228 backend assertions, 53 target fixtures, 34 HTTP fixtures, and the hook/OAuth/calendar checks. The MCP and installed-file checks passed.
+
+The browser showed an empty brief, the configured workday, generic owner settings, and six ordered areas. Only its own site and matching Convex host were requested. No page errors occurred. The settings screenshot was inspected. The browser harness was corrected to wait for live data and close the morning-review dialog before opening settings.
+
+A private browser-harness timeout emitted the throwaway API key in diagnostics. That key was revoked immediately; the backend rejected it. A replacement was set and verified without printing it. The scratch registration was refreshed. The installer correctly refused to overwrite Claude startup metadata; that metadata was backed up, then the exact hash-verified installer snapshot was restored before refresh. No credential entered this repository.
+
+Uninstall preview passed. Eight separate restoration approvals removed the eight created files. Backups remained and the manifest had no active entries. Reinstallation restored the reviewed integration for the pending native check.
+
+The native `/brief` attempt stopped with the provider's sign-in requirement. This prerequisite is already documented in the install guide. Stage 6 is not complete or logged. Retain the isolated projects and scratch homes until native acceptance and final cleanup succeed. Do not install into the real user home yet.
+
+## QC repair 18 · Validation
+
+The report now distinguishes the earlier independent installation review from Stage 6 acceptance. The prompt failure and pending native check are explicit. All finding rows are in one table. Cumulative defects are 16 MAJOR and 15 MINOR, all repaired. The post-change development suite passed 228 backend assertions, 53 target fixtures, 34 HTTP fixtures, and hook/OAuth/calendar checks. Independent handover verification confirmed the corrected status, 31 unique repaired findings, one uninterrupted finding table, and owner-only migration instructions. Privacy lint passed all 98 tracked files and reachable text history. All 45 local links across 32 Markdown files resolve. Every handover commit reference resolves. The final scratch installed-file check passed after reinstallation.
+
+## Stage 7 · Handover prepared and logged
+
+The HANDOVER section above records shipped slices, their commits, the single QC report, 31 repaired findings, the completed acceptance checks, exact owner-run migration commands, and remaining gates. Its preparation was logged through Helm MCP on the isolated development deployment. Native Stage 6 acceptance and cleanup remain pending; no completion for that stage is claimed. The repository remains private. Production and real user configuration remain untouched by this build.
