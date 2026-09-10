@@ -483,3 +483,15 @@ Validation: actual baseline/current undo reproduction, completion/undo and demot
 QC repair 16 complete: completing a chosen task preserves its position while the read API excludes it from active work. Undo restores that position. Explicit next, inbox, waiting, someday, and dropped transitions still remove the choice. The wake-batch comment now states its existing retained-ID priority rule.
 
 Independent verification passed nine actual-handler undo/demotion scenarios and three absent/present/failure preservation probes. Hosted validation passed TypeScript, development push, 234 internal rollback checks, 228 top-level backend assertions, 53 target fixtures, 34 HTTP fixtures, and hook/OAuth/calendar suites. Cumulative confirmed defects are 15 MAJOR and 14 MINOR, all with verified repairs.
+
+## Stage 5 · Completed
+
+All seven independent dimensions, the reused finding verifier, repeat passes for every affected MAJOR dimension, the full-diff high code-review procedure, and the full-diff security-review procedure are complete. Final reviewed runtime commit: `f7e6fa1`. All 15 MAJOR and 14 MINOR confirmed findings are fixed; none remains open. The filtered comment interpretation is recorded separately.
+
+Fresh final-delta review found no qualifying issue. Security review found no new HIGH/MEDIUM vulnerability above its confidence threshold. The external privacy denylist passes all 98 tracked files, 316 reachable text blobs, and commit messages. The final full suite and exact hosted rollback marker passed. Stage completion was logged through Helm MCP on the separate development deployment.
+
+## Stage 6 · Clean installation plan
+
+Create a scratch home and clone from GitHub. Follow `docs/install.md` as the installation guide. Use a second throwaway cloud development project. Keep all global installation files in the scratch home. Record failures or unclear steps as findings, repair them in the main repository, push, and restart the clone. Delete the throwaway project and scratch directories after the whole flow passes.
+
+Claude Code sign-in is a pending prerequisite for the native conversational brief. Core setup, regression, MCP, installer, and glass checks can proceed independently. Optional provider credentials remain absent; no live paid AI or Google account test is claimed.
