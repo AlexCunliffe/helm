@@ -1,6 +1,5 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
-import { execFileSync } from "node:child_process";
 import { ConvexHttpClient } from "convex/browser";
 import { makeFunctionReference } from "convex/server";
 import { development } from "./dev.mjs";
@@ -14,11 +13,7 @@ export async function checkAuthentication() {
   const saved = {};
   for (const name of ["HELM_API_KEY", "HELM_SURFACE_TOKEN", "HELM_ALLOW_ANON", "HELM_REQUIRE_KEY"])
     saved[name] = dev.cli(["env", "get", name]);
-  const getSpec = () => {
-    try { return JSON.parse(execFileSync("npx", ["--no-install", "convex", "function-spec"],
-      { cwd: dev.root, env: dev.env, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] })); }
-    catch { throw new Error("Cannot read development function metadata."); }
-  };
+  const getSpec = () => JSON.parse(dev.cli(["function-spec"]));
   const spec = getSpec(); assert.equal(spec.url, dev.url, "function metadata must match development");
   const functions = spec.functions.filter(f => f.visibility?.kind === "public" && ["Query", "Mutation", "Action"].includes(f.functionType));
   assert.ok(functions.length > 0, "public functions discovered");

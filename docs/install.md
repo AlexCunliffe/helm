@@ -62,7 +62,7 @@ If the CLI selected a local deployment, repeat its configuration and choose clou
 npx convex dev --once --configure
 ```
 
-The repository's setup and test helpers deliberately reject production and local Convex deployment targets.
+The repository's setup and test helpers deliberately reject production and local Convex deployment targets. Keep deployment keys, deployment tokens, and self-hosted selector fields out of `.env.local`. Use the signed-in Convex account. The helpers reject these fields even when empty and recheck the deployment selection before each administration command.
 
 ## 3. Configure Helm
 

@@ -417,3 +417,13 @@ Validation: compare the installation order and source procedure with the actual 
 QC repair 10 complete: the capture guide describes local Claude Code, quickstart cloud selection precedes setup, and all sweep design references distinguish incremental boundaries from complete rolling calendar windows. Repeated calendar reads preserve completed prep.
 
 Independent verification confirmed DOC-001/002/003 against both sweep procedures, source presets, MCP forwarding, and backend behavior. All 234 backend assertions and hook/OAuth/calendar suites passed. All 32 tracked Markdown files have resolving local links. All 14 MAJOR and 8 MINOR findings now have verified repairs; fresh repeat reviews follow before Stage 5 completion.
+
+## QC repair 11 plan: bind administration to the validated development target
+
+Finding: INST-02. Parse deployment files with the same dotenv version as the pinned Convex CLI. Reject credential and self-hosted overrides. Remove ambient aliases. Revalidate the selected deployment before every administration subprocess. Use the same guarded path for regression commands and function metadata.
+
+Validation: offline parser/precedence fixtures covering duplicate, quoted, export, colon, key/token, self-hosted, ambient, and changed-file cases; actual CLI selector probes with networking disabled; full development, wizard, installer, rotation, hook/OAuth/calendar, and MCP checks as appropriate. No production invocation.
+
+QC repair 11 complete: all development administration uses the effective dotenv selection, rejects conflicting credentials/targets, and rechecks the original target before each subprocess. The actual CLI selector and regression wrapper passed 85 independent/tracked cases. All 234 backend assertions, 49 target fixtures, hook/OAuth/calendar/MCP suites, wizard acceptance, and scratch-home installation/restoration passed. No production invocation occurred.
+
+Fresh repeat reviews added one MAJOR and four MINOR defects and reopened one previously counted documentation reference. Cumulative totals are 15 MAJOR and 12 MINOR. All MAJOR repairs are verified; another installation review remains. Five MINOR repair scopes remain.

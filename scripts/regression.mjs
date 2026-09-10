@@ -33,11 +33,15 @@ const devTarget = development(ROOT);
 const secretValues = new Set();
 const redact = value => { let text = String(value); for (const secret of secretValues) text = text.replaceAll(secret, "[redacted]"); return text; };
 function execFileSync(command, args, options = {}) {
-  if (command !== "npx" || !args.includes("convex") || args.some(a => ["--prod", "--deployment", "--deployment-name", "--team", "--project"].includes(a)))
+  if (command !== "npx" || !args.includes("convex"))
     throw new Error("Regression commands must use the configured development deployment.");
-  const selected = args.indexOf("--env-file");
-  if (selected >= 0 && args[selected + 1] !== devTarget.envFile) throw new Error("Unexpected environment file.");
-  const bounded = selected >= 0 ? args : [...args, "--env-file", devTarget.envFile];
+  const operation = args.slice(args.indexOf("convex") + 1);
+  const selected = operation.indexOf("--env-file");
+  if (selected >= 0) {
+    if (operation[selected + 1] !== devTarget.envFile) throw new Error("Unexpected environment file.");
+    operation.splice(selected, 2);
+  }
+  const bounded = devTarget.cliArgs(operation);
   const result = rawExecFileSync(command, bounded, { ...options, cwd: ROOT, env: devTarget.env, stdio: ["ignore", "pipe", "pipe"] });
   const getAt = args.indexOf("get");
   if (args.includes("env") && getAt >= 0 && /(?:KEY|TOKEN)$/.test(args[getAt + 1]) && String(result).trim()) secretValues.add(String(result).trim());

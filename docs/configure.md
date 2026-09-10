@@ -145,3 +145,7 @@ The seed command leaves an existing area table unchanged. Use the wizard to appl
 Keep deployment credentials in Convex environment values. The setup wizard creates missing Helm keys and preserves existing ones. It can set an optional Anthropic key through hidden input. It never prints or saves that input. The Settings panel's Rotate key action shows a terminal command. It does not hold a deployment-admin credential.
 
 Read [security](security.md) before rotation. Read [deployment](deploy.md) before moving to production.
+
+## Development target selection
+
+Use the generated development selector and matching client URL in `.env.local`. Standard dotenv quoting is accepted. Remove `CONVEX_DEPLOY_KEY`, `CONVEX_DEPLOYMENT_TOKEN`, `CONVEX_DEPLOYMENT_KEY`, `CONVEX_SELF_HOSTED_URL`, and `CONVEX_SELF_HOSTED_ADMIN_KEY` from that file. Remove the assignments even when they are empty. Use the signed-in Convex account. Restart an active setup or administration command after changing its deployment selector or client URL.
