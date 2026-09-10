@@ -54,7 +54,7 @@ async function byStatus(ctx: QueryCtx, status: Doc<"tasks">["status"]) {
  * wins; otherwise auto-pick: status:today first, then fill from urgent/due/next.
  * Snoozed and closed tasks never appear.
  */
-async function computeToday(ctx: QueryCtx, now: number, settings: Settings): Promise<Doc<"tasks">[]> {
+export async function computeToday(ctx: QueryCtx, now: number, settings: Settings): Promise<Doc<"tasks">[]> {
   const ordered: Doc<"tasks">[] = [];
   const seen = new Set<Id<"tasks">>();
   const add = (t: Doc<"tasks">) => {

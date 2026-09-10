@@ -437,3 +437,15 @@ Validation: UTF-8/escaping and exact encoded-boundary fixtures, actual HTTP hand
 QC repair 12 complete: encoded HTTP JSON is bounded at 8 MiB with an explicit 413 response; legal stored text is unchanged. Wins/ageing counts report eligibility totals independent of display caps. The residual fictional adapter reference is removed.
 
 Independent verification passed 100 JSON boundary/Unicode cases, seven actual HTTP scenarios, count fixtures across four caps, and three internal-probe assertions. TypeScript, development push, 237 backend assertions, 34 tracked HTTP fixtures, 49 target fixtures, and hook/OAuth/calendar suites passed. The test harness URL-decoding draft issue was corrected before the complete green run.
+
+## QC repair 13 plan: preserve missing check-ins during wake tests
+
+Finding: ROOT-05. Remove the current-day wake test and its lossy restoration. Exercise the same status, clock, future-snooze, explicit-order, and demotion behavior inside the existing always-rollback wake transaction. Keep all queued continuations and temporary rows within that rollback boundary.
+
+Validation: independent execution of the rollback probe, TypeScript, development push, the hosted success marker, and the full development suite.
+
+QC repair 13 complete: D2 now runs only the always-rollback wake probe. It does not create or restore a live current-day check-in. The probe exercises actual status and Now helpers, future snoozes, clocks, batch ownership, recovery, and legacy payload behavior.
+
+Independent verification passed 40 mutation/scheduler cases and three transaction-model cases covering initially absent state, existing check-ins/jobs, and injected failure after queued work. Success reached 230 internal checks. TypeScript, development push, 228 top-level backend assertions, HTTP/target fixtures, and hook/OAuth/calendar suites passed. The reduced top-level count reflects replacement of the live test by rollback assertions.
+
+The fresh installation pass found zero MAJOR issues and one MINOR URL-normalization edge (INST-03). Cumulative confirmed defects are now 15 MAJOR and 13 MINOR. Two MINOR scopes remain: INST-03 and CONTRACT-04.

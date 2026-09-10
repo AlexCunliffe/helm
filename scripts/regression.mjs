@@ -313,58 +313,10 @@ async function main() {
 
   // ── D2 · snooze-waker returns-to-Now (H4 + 4.5) ──
   console.log("\nD2 · snooze-waker returns-to-Now (H4 + 4.5)");
-  const todayLondon = new Date().toLocaleDateString("en-CA", { timeZone: (await q("settings:get")).timezone });
-  const priorMorning = await q("checkins:getCheckin", { date: todayLondon, kind: "morning" });
-  try {
-    const w1 = await m("tasks:capture", { title: "TEST wake me", dedupeKey: key("w1") });
-    const w2 = await m("tasks:capture", { title: "TEST still parked", dedupeKey: key("w2") });
-    const w3 = await m("tasks:capture", {
-      title: "TEST timed chase", dedupeKey: key("w3"), status: "waiting", waitingOn: "Sam",
-    });
-    await m("tasks:snooze", { id: w1.taskId, until: Date.now() - 1000 }); // already due
-    await m("tasks:snooze", { id: w2.taskId, until: Date.now() + 3600_000 }); // due in an hour
-    await m("tasks:snooze", { id: w3.taskId, until: Date.now() - 1000 }); // due chase
-    const wakeOut = JSON.parse(execFileSync(
-      "npx", ["convex", "run", "tasks:wakeExpired"], { cwd: ROOT, encoding: "utf8" },
-    ));
-    // The LIVE per-minute cron may race this manual run and wake the fixtures
-    // first — so assert observed state below, not who did the waking.
-    assert(typeof wakeOut.woken === "number" && typeof wakeOut.promoted === "number",
-      "waker: runs and reports counts");
-    const w1doc = await q("tasks:get", { id: w1.taskId });
-    const w2doc = await q("tasks:get", { id: w2.taskId });
-    const w3doc = await q("tasks:get", { id: w3.taskId });
-    assert(w1doc.snoozeUntil === undefined, "waker: expired snooze cleared");
-    assert(w2doc.snoozeUntil !== undefined, "waker: future snooze untouched");
-    // 4.5: back as promised — the woken task TAKES the Now slot
-    assert(w1doc.status === "today" && typeof w1doc.wokeAt === "number",
-      "waker: woken open task promoted to today with wokeAt stamped");
-    const pick = await q("queries:todaysPick", {});
-    assert(pick && pick._id === w1.taskId, "waker: woken task leads todaysPick (Back as promised)");
-    await m("tasks:defer", { id: w1.taskId, status: "waiting" });
-    assert((await q("queries:todaysPick"))?._id !== w1.taskId, "Now: delegated choice no longer leads");
-    await m("tasks:setStatus", { id: w1.taskId, status: "today" });
-    await m("checkins:upsertCheckin", { date: todayLondon, kind: "morning", chosen: [w1.taskId, ...((await q("checkins:getCheckin", { date: todayLondon, kind: "morning" }))?.chosen ?? [])] });
-    await m("tasks:defer", { id: w1.taskId, status: "someday" });
-    assert((await q("queries:todaysPick"))?._id !== w1.taskId, "Now: deferred choice no longer leads");
-    await m("tasks:setStatus", { id: w1.taskId, status: "today" });
-    await m("checkins:upsertCheckin", { date: todayLondon, kind: "morning", chosen: [w1.taskId, ...((await q("checkins:getCheckin", { date: todayLondon, kind: "morning" }))?.chosen ?? [])] });
-    // A timed chase resurfaces in the waiting pile — it doesn't fake actionability
-    assert(w3doc.status === "waiting" && w3doc.waitingSince !== undefined
-      && typeof w3doc.wokeAt === "number",
-      "waker: woken waiting task stays a chase (ageing clock intact)");
-    const nowChosen = await q("checkins:getCheckin", { date: todayLondon, kind: "morning" });
-    assert(nowChosen.chosen[0] === w1.taskId && !nowChosen.chosen.includes(w3.taskId),
-      "waker: promoted task heads the morning order; the chase doesn't");
-  } finally {
-    // Restore the real morning check-in order (fixtures purge; order shouldn't drift)
-    await m("checkins:upsertCheckin", {
-      date: todayLondon, kind: "morning", chosen: priorMorning?.chosen ?? [],
-    });
-  }
-
-  const w1r = await m("tasks:capture", { title: "TEST re-capture w1", dedupeKey: key("w1") });
-  await m("tasks:setStatus", { id: w1r.taskId, status: "inbox" }); // park fixtures out of the live Now
+  let wakeProbe = false;
+  try { execFileSync("npx", ["--no-install", "convex", "run", "testing:wakeBatchProbe", "{}"], { cwd: ROOT, encoding: "utf8" }); }
+  catch (error) { wakeProbe = String(error.stderr ?? "").includes("WAKE_PROBE_PASSED_ROLLED_BACK:"); }
+  assert(wakeProbe, "waker: clocks, future snoozes, Now/demotion, batches, recovery, byte limits, and original state roll back safely");
 
   const s1 = await m("tasks:capture", { title: "TEST start me", dedupeKey: key("s1") });
   await m("tasks:start", { id: s1.taskId });
@@ -993,10 +945,6 @@ async function main() {
   await throws(() => m("checkins:upsertCheckin", { date: SAFE_DATE, kind: "evening", fixtureRunId: PREFIX, summary: "x".repeat(10001) }), "capacity: oversized summary rejected");
   await throws(() => m("checkins:reconcileOutstanding", { dates: Array(61).fill(SAFE_DATE), fixtureRunId: PREFIX }), "capacity: excessive explicit dates rejected");
   for (const lookbackDays of [0, 1.5, 61]) await throws(() => m("checkins:reconcileOutstanding", { lookbackDays, fixtureRunId: PREFIX }), "capacity: invalid lookback rejected");
-  let wakeProbe = false;
-  try { execFileSync("npx", ["--no-install", "convex", "run", "testing:wakeBatchProbe", "{}"], { cwd: ROOT, encoding: "utf8" }); }
-  catch (error) { wakeProbe = String(error.stderr ?? "").includes("WAKE_PROBE_PASSED_ROLLED_BACK:"); }
-  assert(wakeProbe, "waker: batched progress, ownership, recovery, current order, byte limits, and legacy fallback roll back safely");
 
   console.log("\nU · bounded query and history contracts");
   const pageArea = "test-page-" + randomUUID().slice(0, 8);

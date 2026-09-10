@@ -50,7 +50,7 @@ export const get = query({
  * read `doneAt`). Leaving `done` clears the stamp: un-completing removes the
  * task from dayLog/streak — this is what the glass Z-undo rides on.
  */
-async function applyStatus(
+export async function applyStatus(
   ctx: MutationCtx,
   id: Id<"tasks">,
   status: Doc<"tasks">["status"], // derived from the schema — one source of truth

@@ -7,16 +7,17 @@
  * date-wide deletion is deliberately refused.
  */
 import type { Id } from "./_generated/dataModel";
-import { wakeDueBatch } from "./tasks";
+import { applyStatus, wakeDueBatch } from "./tasks";
 import { internalMutation, internalQuery, internalAction } from "./_generated/server";
 import { v, ConvexError } from "convex/values";
 import { seedAreaRows } from "./areas";
 import { dayRange, dateString } from "./lib/time";
 import { readSettings } from "./lib/settings";
 import { replaceMeetingWindow, readMeetingMirror, readUpcomingMeetings, promoteMeetingPrep } from "./meetings";
-import { removeFromNow } from "./lib/nowOrder";
+import { prependNow, removeFromNow } from "./lib/nowOrder";
 import { loadCalendarWindow } from "./lib/calendar";
 import { boundedRows } from "./lib/bounds";
+import { computeToday } from "./queries";
 import { boundedJson, HttpCapacityError } from "./lib/httpJson";
 import { checkinDoc } from "./validators";
 
@@ -229,6 +230,9 @@ export const wakeBatchProbe = internalMutation({
       origin: "planned", source: "test", snoozeUntil: 1, updatedAt: 1,
       dedupeKey: "test:wake-probe:" + i,
     }));
+    const future = await ctx.db.insert("tasks", { title: "TEST future wake", areaId: area._id,
+      status: "inbox", origin: "planned", source: "test", snoozeUntil: 3, updatedAt: 1,
+      dedupeKey: "test:wake-probe:future" });
     const first = await run(), firstState = (await state())!;
     check(first.woken === 100 && first.promoted === 100, "first bounded batch");
     const job = await ctx.db.system.get(firstState.scheduledJobId!);
@@ -249,10 +253,24 @@ export const wakeBatchProbe = internalMutation({
     check((await morning())!.chosen.length === 200, "maintained head bounded");
     for (const id of ids) {
       const task = (await ctx.db.get(id))!;
-      check(task.status === "today" && task.snoozeUntil === undefined && task.waitingSince === undefined, "all backlog tasks progress");
+      check(task.status === "today" && task.snoozeUntil === undefined && task.waitingSince === undefined && task.wokeAt === 2, "all backlog tasks progress with fresh clocks");
     }
     check((await run(thirdState.generation)).woken === 0 && !(await state())!.scheduledJobId, "empty continuation releases ownership");
     check((await run(thirdState.generation)).woken === 0, "inactive generation rejected");
+    check((await ctx.db.get(future))!.snoozeUntil === 3, "future snooze untouched");
+    const currentHead = (await morning())!.chosen[0];
+    const picks = () => computeToday({ ...ctx }, 2, { ...settings, caps: { ...settings.caps, today: 3 } });
+    check((await picks())[0]._id === currentHead, "woken head leads the actual Now query");
+    await applyStatus({ ...ctx }, currentHead, "waiting", 2);
+    check(!(await picks()).some(t => t._id === currentHead), "delegated choice leaves Now");
+    check(!(await morning())!.chosen.includes(currentHead), "delegation removes explicit choice");
+    await applyStatus({ ...ctx }, currentHead, "today", 2);
+    await prependNow({ ...ctx }, date, [currentHead]);
+    await applyStatus({ ...ctx }, currentHead, "someday", 2);
+    check(!(await picks()).some(t => t._id === currentHead), "deferred choice leaves Now");
+    check(!(await morning())!.chosen.includes(currentHead), "deferral removes explicit choice");
+    await applyStatus({ ...ctx }, currentHead, "today", 2);
+    await prependNow({ ...ctx }, date, [currentHead]);
     // Escaped text must use Convex storage size, not its much larger JSON encoding.
     // The legacy check-in stays byte-for-byte intact while both large batches progress.
     const largeMorning = (await morning())!;
