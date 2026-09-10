@@ -427,3 +427,13 @@ Validation: offline parser/precedence fixtures covering duplicate, quoted, expor
 QC repair 11 complete: all development administration uses the effective dotenv selection, rejects conflicting credentials/targets, and rechecks the original target before each subprocess. The actual CLI selector and regression wrapper passed 85 independent/tracked cases. All 234 backend assertions, 49 target fixtures, hook/OAuth/calendar/MCP suites, wizard acceptance, and scratch-home installation/restoration passed. No production invocation occurred.
 
 Fresh repeat reviews added one MAJOR and four MINOR defects and reopened one previously counted documentation reference. Cumulative totals are 15 MAJOR and 12 MINOR. All MAJOR repairs are verified; another installation review remains. Five MINOR repair scopes remain.
+
+## QC repair 12 plan: make brief limits explicit
+
+Findings: CVX-10, CVX-11, and residual DOC-003. Bound encoded HTTP JSON independently from Convex value sizes. Return an explicit capacity error without truncating text. Count eligible wins and ageing tasks before display slicing. Document count meanings and remove the stale universal source-adapter reference.
+
+Validation: UTF-8/escaping and exact encoded-boundary fixtures, actual HTTP handlers, hosted response-capacity probe, display-cap count invariance, TypeScript, development push, and the full development suite.
+
+QC repair 12 complete: encoded HTTP JSON is bounded at 8 MiB with an explicit 413 response; legal stored text is unchanged. Wins/ageing counts report eligibility totals independent of display caps. The residual fictional adapter reference is removed.
+
+Independent verification passed 100 JSON boundary/Unicode cases, seven actual HTTP scenarios, count fixtures across four caps, and three internal-probe assertions. TypeScript, development push, 237 backend assertions, 34 tracked HTTP fixtures, 49 target fixtures, and hook/OAuth/calendar suites passed. The test harness URL-decoding draft issue was corrected before the complete green run.

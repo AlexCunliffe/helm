@@ -17,6 +17,7 @@ import { replaceMeetingWindow, readMeetingMirror, readUpcomingMeetings, promoteM
 import { removeFromNow } from "./lib/nowOrder";
 import { loadCalendarWindow } from "./lib/calendar";
 import { boundedRows } from "./lib/bounds";
+import { boundedJson, HttpCapacityError } from "./lib/httpJson";
 import { checkinDoc } from "./validators";
 
 export const purgeTestData = internalMutation({
@@ -272,5 +273,25 @@ export const wakeBatchProbe = internalMutation({
     check(JSON.stringify(await morning()) === beforeLarge, "legacy fallback stays unchanged across batches");
     check((await state())!.generation > thirdState.generation, "new idle generation never reuses token");
     throw new ConvexError("WAKE_PROBE_PASSED_ROLLED_BACK:" + checks);
+  },
+});
+
+/** Exercise encoded output capacity in the hosted action runtime. No writes. */
+export const httpResponseProbe = internalAction({
+  args: {}, returns: v.object({ checks: v.number() }),
+  handler: async () => {
+    const note = "\0".repeat(800000);
+    const task = { note };
+    const brief = { pick: task, today: [task, task, task], wins: [task, task, task], ageing: [task, task, task] };
+    let rejected = false;
+    try { boundedJson(brief); } catch (error) { rejected = error instanceof HttpCapacityError; }
+    if (!rejected) throw new ConvexError("HTTP_PROBE_FAILED: escaped body was accepted");
+    const small = { title: "Résumé 🌿", optional: undefined, slots: [undefined, null], note: "\0\n\"" };
+    const expected = JSON.stringify(small), bytes = new TextEncoder().encode(expected).byteLength;
+    if (boundedJson(small, bytes) !== expected) throw new ConvexError("HTTP_PROBE_FAILED: exact boundary");
+    rejected = false;
+    try { boundedJson(small, bytes - 1); } catch (error) { rejected = error instanceof HttpCapacityError; }
+    if (!rejected) throw new ConvexError("HTTP_PROBE_FAILED: boundary overflow");
+    return { checks: 3 };
   },
 });

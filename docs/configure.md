@@ -71,7 +71,7 @@ A first wizard run suggests the operating system's timezone. Existing settings k
 
 ## Display and timing limits
 
-All cap overrides are optional integers. Clear an override to restore its default. Display caps limit returned sections; they do not limit the number of stored tasks.
+All cap overrides are optional integers. Clear an override to restore its default. Display caps limit returned sections; they do not limit the number of stored tasks. Brief counts report all eligible waiting, inbox, wins, ageing, and upcoming tasks within the read capacity. `counts.today` reports the selected daily shortlist. Changing `wins` or `ageing` display caps does not change their counts.
 
 | Field under `caps` | Default | Allowed range | Effect |
 | --- | --- | --- | --- |

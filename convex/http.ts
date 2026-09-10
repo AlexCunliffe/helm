@@ -18,6 +18,7 @@ import { httpAction } from "./_generated/server";
 import { api, internal } from "./_generated/api";
 import { parseIngest } from "./lib/ingest";
 import { timingSafeEqual } from "./lib/auth";
+import { boundedJson, HttpCapacityError } from "./lib/httpJson";
 import { GLASS_HTML } from "./glass";
 
 // Server-side hop: http actions present the function-level key themselves —
@@ -31,7 +32,14 @@ const CORS = {
 };
 
 function json(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), {
+  let encoded: string | undefined;
+  try { encoded = boundedJson(body); }
+  catch (error) {
+    if (!(error instanceof HttpCapacityError)) throw error;
+    status = 413;
+    encoded = JSON.stringify({ error: "HTTP JSON exceeds 8 MiB. Reduce brief display caps or use paginated task reads." });
+  }
+  return new Response(encoded, {
     status,
     headers: { "Content-Type": "application/json", "Cache-Control": "no-store", ...CORS },
   });

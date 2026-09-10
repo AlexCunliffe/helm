@@ -7,7 +7,7 @@
   "scripts": {
     "dev": "convex dev",
     "deploy": "convex deploy",
-    "test": "node scripts/test-dev-target.mjs && node scripts/regression.mjs && node scripts/test-hook.mjs && node scripts/test-google-cal-auth.mjs && node scripts/test-calendar.mjs",
+    "test": "node scripts/test-dev-target.mjs && node scripts/test-http-output.mjs && node scripts/regression.mjs && node scripts/test-hook.mjs && node scripts/test-google-cal-auth.mjs && node scripts/test-calendar.mjs",
     "glass:embed": "node scripts/embed-glass.mjs",
     "oss:lint": "node scripts/oss-lint.mjs",
     "test:mcp": "node mcp/test-client.mjs",
@@ -24,7 +24,8 @@
     "test:calendar-auth": "node scripts/test-google-cal-auth.mjs",
     "test:setup:order": "node --experimental-vm-modules scripts/test-setup-order.mjs",
     "test:calendar": "node scripts/test-calendar.mjs",
-    "test:dev-target": "node scripts/test-dev-target.mjs"
+    "test:dev-target": "node scripts/test-dev-target.mjs",
+    "test:http-output": "node scripts/test-http-output.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.110.0",

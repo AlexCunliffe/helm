@@ -8,7 +8,7 @@ Helm must absorb new capture sources, new surfaces, and new brain categories wit
 - **`source` is a free string** with a documented registry — a brand-new capture channel needs no schema edit at all.
 
 ## Add a capture source
-Add an entry to `settings.sources`. Set its MCP server, kind, and source notes. Enable it when the connector is ready. For a custom backend integration, implement the `CaptureSource` adapter described in `docs/05-capture.md`. It emits `CaptureCandidate`s into the same `capture` path. Nothing else changes. (Future: SMS, WhatsApp, voice memo, a Linear webhook…)
+Add an entry to `settings.sources`. Set its MCP server, kind, and source notes. Enable it when the connector is ready. For a custom backend integration, translate source records into the existing `capture` arguments. Follow the source-specific window and dedupe rules in [capture](05-capture.md). The repository does not supply a universal adapter interface. (Future: SMS, WhatsApp, voice memo, a Linear webhook…)
 
 ## Add a surface
 Consume the read API / `GET /brief`. Render. No brain change (`docs/06`). (Future: Apple Watch complication, a hallway LED matrix, a CarPlay glance…)
@@ -24,7 +24,9 @@ Don't collapse these seams for short-term convenience (e.g. hardcoding an area l
 
 ## Read capacities
 
-Complete task queries support at most 1000 rows in each selected index partition. An operation also has a shared task/meeting read budget of 4000 rows and 4 MiB of serialized data. A complete summary fails with a clear capacity error when a bound is exceeded; it does not report a truncated total. Display caps apply after complete bounded reads. Areas retain their separate 100-row limit.
+Complete task queries support at most 1000 rows in each selected index partition. An operation also has a shared task/meeting read budget of 4000 rows and 4 MiB of serialized data. A complete summary fails with a clear capacity error when a bound is exceeded; it does not report a truncated total. Display caps apply after complete bounded reads. Areas retain their separate 100-row limit. Brief counts report eligible totals before display slicing, except `counts.today`, which reports the selected shortlist.
+
+HTTP JSON responses have a separate 8 MiB encoded-byte limit. JSON escapes and repeated views count toward this limit. `GET /brief` returns status 413 with a small capacity error if the encoded response exceeds it. Stored text is unchanged. Reduce brief display caps or use paginated task reads.
 
 Use MCP `listPage` for larger task history. Keep the filters unchanged. Pass each `continueCursor` as the next `cursor`. Continue until `isDone` is true, including after an empty filtered page. `numItems` is an integer from 1 to 200 and defaults to 50. Each page scans up to the requested rows, with additional 200-row and 1 MiB database read bounds. Filters can produce fewer returned items. Pages use newest creation order; `list` uses priority order. Without a status filter, `listPage` includes closed work too.
 

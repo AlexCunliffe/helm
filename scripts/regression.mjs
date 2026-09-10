@@ -507,6 +507,23 @@ async function main() {
   const streakAfter = (await q("queries:brief", {})).streak;
   assert(streakAfter === streakBefore, "streak: unconfirmed provisional doesn't move it");
 
+  const countSettings = await q("settings:get");
+  try {
+    await m("settings:update", { patch: { caps: { wins: 100, ageing: 100 } } });
+    const totals = (await q("queries:brief")).counts;
+    await m("settings:update", { patch: { caps: { wins: 0, ageing: 0 } } });
+    const hidden = await q("queries:brief");
+    assert(hidden.wins.length === 0 && hidden.ageing.length === 0, "brief: zero display caps hide suggestions");
+    assert(hidden.counts.wins === totals.wins && hidden.counts.ageing === totals.ageing,
+      "brief: eligibility counts do not change with display caps");
+  } finally {
+    await m("settings:update", { patch: { caps: {
+      wins: countSettings.caps?.wins ?? null, ageing: countSettings.caps?.ageing ?? null,
+    } } });
+  }
+  const httpProbe = JSON.parse(execFileSync("npx", ["convex", "run", "testing:httpResponseProbe", "{}"], { cwd: ROOT, encoding: "utf8" }));
+  assert(httpProbe.checks === 3, "HTTP: hosted encoded capacity and exact UTF-8 boundaries");
+
   // ── H · token-guarded HTTP surface (H3 hardening) ──
   console.log("\nH · HTTP surface");
   const SITE_URL = devTarget.url.replace(".convex.cloud", ".convex.site");

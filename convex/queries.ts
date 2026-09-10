@@ -154,7 +154,7 @@ export const brief = query({
       ...(await byStatus(ctx, "today")),
       ...(await byStatus(ctx, "next")),
     ].filter((t) => !isSnoozed(t, now));
-    const wins = actionable.filter((t) => t.size === "xs").sort(byPriority).slice(0, (settings.caps?.wins ?? WINS_CAP));
+    const wins = actionable.filter((t) => t.size === "xs").sort(byPriority);
 
     // ageing flags: waiting too long, or open + untouched too long.
     const ageingSet = new Map<Id<"tasks">, Doc<"tasks">>();
@@ -167,8 +167,7 @@ export const brief = query({
       if (now - t.updatedAt > (settings.caps?.openAgeingDays ?? OPEN_AGEING_DAYS) * DAY_MS) ageingSet.set(t._id, t);
     }
     const ageing = [...ageingSet.values()]
-      .sort((a, b) => (a.waitingSince ?? a.updatedAt) - (b.waitingSince ?? b.updatedAt))
-      .slice(0, (settings.caps?.ageing ?? AGEING_CAP));
+      .sort((a, b) => (a.waitingSince ?? a.updatedAt) - (b.waitingSince ?? b.updatedAt));
 
     // Mirror inbox()'s predicate exactly: a closed task isn't "awaiting confirm",
     // so the badge can't drift above the list.
@@ -203,8 +202,8 @@ export const brief = query({
       // Helm exists to prevent (H6). counts.waiting stays the true total; the
       // full pile is one `waiting` query away.
       waiting: waitingDocs.slice(0, (settings.caps?.waiting ?? WAITING_CAP)).map(view),
-      wins: wins.map(view),
-      ageing: ageing.map(view),
+      wins: wins.slice(0, (settings.caps?.wins ?? WINS_CAP)).map(view),
+      ageing: ageing.slice(0, (settings.caps?.ageing ?? AGEING_CAP)).map(view),
       upcoming: upcomingDocs.slice(0, (settings.caps?.upcoming ?? UPCOMING_CAP)).map(view),
       meetings,
       energy,
